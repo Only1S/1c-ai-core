@@ -1,0 +1,380 @@
+{
+  "description": "Защита и подсказки ядра ones-core: барьеры опасных команд и правок, проверка модулей .bsl и проектных доков, правила на каждый запрос, сканер внешнего контента, проверки конца хода и подсказка по ним в следующем ходе",
+  "modules": ["./status-band.tsx"],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.py\"",
+            "timeout": 15,
+            "statusMessage": "где лежат правила ядра и все ли программы установлены"
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat \"${CLAUDE_PLUGIN_ROOT}/hooks/postcompact-note.md\"",
+            "timeout": 10,
+            "statusMessage": "напоминание о порядке работы после сжатия контекста"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/prompt-gate.py\"",
+            "timeout": 10,
+            "statusMessage": "правила работы: факты только через инструменты"
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-gate.py\"",
+            "timeout": 10,
+            "statusMessage": "запись согласия владельца на помощников"
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/answer-feedback.py\"",
+            "timeout": 10,
+            "statusMessage": "подсказка: что проверки отметили в прошлом ответе"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-gate.py\"",
+            "timeout": 10,
+            "statusMessage": "правила работы для помощника"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|WebFetch|mcp__ssh-mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-destructive.py\"",
+            "timeout": 20,
+            "statusMessage": "проверка: нет ли опасной команды или обращения к рабочей базе"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-destructive.py\"",
+            "timeout": 20,
+            "statusMessage": "проверка: не секрет ли файл"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-skills.py\"",
+            "timeout": 20,
+            "statusMessage": "проверка: файлы 1С меняются через свой скилл"
+          }
+        ]
+      },
+      {
+        "matcher": "Skill|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-skills.py\"",
+            "timeout": 10,
+            "statusMessage": "проверка: скилл и мост 1С — из своего источника"
+          }
+        ]
+      },
+      {
+        "matcher": "^mcp__.*[Tt][Oo][Oo][Ll][Kk][Ii][Tt]",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-personal-data.py\"",
+            "timeout": 10,
+            "statusMessage": "проверка: данные базы 1С — только с базы без настоящих персональных данных"
+          }
+        ]
+      },
+      {
+        "matcher": "^AskUserQuestion$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-skills.py\"",
+            "timeout": 10,
+            "statusMessage": "проверка: у вопроса есть рекомендуемый вариант"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/support-guard.py\"",
+            "timeout": 20,
+            "statusMessage": "проверка: объект поставщика на поддержке не правится вручную"
+          }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/enrich-code-facts.py\"",
+            "timeout": 15,
+            "statusMessage": "подсказка из индекса кода"
+          }
+        ]
+      },
+      {
+        "matcher": "^(Agent|Task|Workflow|CronCreate|RemoteTrigger|mcp__.*scheduled-tasks__.*|mcp__.*ccd_session__(start_session|hand_off_to_session))$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-gate.py\"",
+            "timeout": 10,
+            "statusMessage": "проверка: на помощников и новые сессии есть «да» владельца"
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|PowerShell|Edit|Write|MultiEdit)$|^mcp__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/repeat-guard.py\"",
+            "timeout": 10,
+            "statusMessage": "проверка: этот же вызов не падал 3 раза подряд"
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|PowerShell)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/shell-arm.py\"",
+            "timeout": 30,
+            "statusMessage": "взвод гейта: время старта команды"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "WebFetch|WebSearch|mcp__Claude_Browser__(get_page_text|read_page)|mcp__claude-in-chrome__(get_page_text|read_page)|mcp__.*__firecrawl_.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/scan-inbound.py\"",
+            "timeout": 15,
+            "statusMessage": "проверка внешнего текста на подложенные инструкции"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/scan-inbound.py\"",
+            "if": "Bash(gh *)",
+            "timeout": 15,
+            "statusMessage": "проверка внешнего текста на подложенные инструкции"
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/scan-inbound.py\"",
+            "if": "Bash(curl *)",
+            "timeout": 15,
+            "statusMessage": "проверка внешнего текста на подложенные инструкции"
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/scan-inbound.py\"",
+            "if": "Bash(defuddle *)",
+            "timeout": 15,
+            "statusMessage": "проверка внешнего текста на подложенные инструкции"
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/scan-inbound.py\"",
+            "if": "Bash(curl.exe *)",
+            "timeout": 15,
+            "statusMessage": "проверка внешнего текста на подложенные инструкции"
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/scan-inbound.py\"",
+            "if": "Bash(gh.exe *)",
+            "timeout": 15,
+            "statusMessage": "проверка внешнего текста на подложенные инструкции"
+          }
+        ]
+      },
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/scan-inbound.py\"",
+            "timeout": 15,
+            "statusMessage": "проверка внешнего текста на подложенные инструкции"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/scan-inbound.py\"",
+            "if": "Read(//**/page-*.md)",
+            "timeout": 15,
+            "statusMessage": "проверка внешнего текста на подложенные инструкции"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/validate-bsl.py\"",
+            "if": "Edit(//**/*.bsl)",
+            "timeout": 60,
+            "statusMessage": "проверка изменённого модуля .bsl"
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/lint-project-docs.py\"",
+            "if": "Edit(//**/*.md)",
+            "timeout": 15,
+            "statusMessage": "проверка проектного дока: матрица, ADR, ссылки"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/validate-bsl.py\"",
+            "timeout": 60,
+            "statusMessage": "проверка изменённого модуля .bsl (запись файла целиком)"
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/lint-project-docs.py\"",
+            "timeout": 15,
+            "statusMessage": "проверка проектного дока: матрица, ADR, ссылки"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__edt-.*__write_module_source",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/validate-bsl.py\"",
+            "timeout": 60,
+            "statusMessage": "проверка модуля, записанного через EDT"
+          }
+        ]
+      },
+      {
+        "matcher": "^AskUserQuestion$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-gate.py\"",
+            "timeout": 10,
+            "statusMessage": "запись ответа владельца из окна вариантов"
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|PowerShell)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/shell-arm.py\"",
+            "timeout": 30,
+            "statusMessage": "взвод гейта: файлы 1С, записанные командой"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/failure-streak.py\"",
+            "timeout": 10,
+            "statusMessage": "счёт сбоев инструментов подряд"
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|PowerShell)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/shell-arm.py\"",
+            "timeout": 30,
+            "statusMessage": "взвод гейта: файлы 1С, записанные командой"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-guard.py\"",
+            "timeout": 15,
+            "statusMessage": "напоминание: проверки и журнал перед концом хода"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-guard.py\"",
+            "timeout": 15,
+            "statusMessage": "наблюдение: итог помощника"
+          }
+        ]
+      }
+    ]
+  }
+}

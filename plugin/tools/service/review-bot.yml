@@ -1,0 +1,65 @@
+# Ревью-бот 1С: шаблон для репозитория конфигурации. Скопируйте в .github/workflows/review-bot.yml.
+# Модель только читает изменения запроса и оставляет комментарий; правок и слияния не делает.
+# Секреты репозитория: CLAUDE_CODE_OAUTH_TOKEN (claude setup-token) и ONES_CORE_TOKEN (токен с чтением канала плагина).
+# Подробно — docs/tools/agent-service-deploy.md.
+name: Ревью-бот 1С
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths:
+      - '**/*.bsl'
+      - '**/*.xml'
+      - '**/*.mdo'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    # чужая копия репозитория секретов не получает; черновик ждёт готовности
+    if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить Claude Code
+        env:
+          CLAUDE_VERSION: '2.1.314'   # версия и сумма обновляются вместе: docs/tools/nightwatch-deploy.md
+          CLAUDE_SHA256: 4487042b4c4f5d88d4568f68ae98aae0b1ffae58864cf57fb868641bc5f84594
+        run: |
+          curl -fsSL "https://downloads.claude.ai/claude-code-releases/$CLAUDE_VERSION/linux-x64/claude" -o claude
+          echo "$CLAUDE_SHA256  claude" | sha256sum -c -
+          install -D -m 755 claude "$HOME/.local/bin/claude"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Получить плагин ones-core
+        env:
+          GH_TOKEN: ${{ secrets.ONES_CORE_TOKEN }}
+        run: |
+          # последний выпуск по тегу, файлы сверяются с SHA256SUMS.txt его страницы Release
+          TAG="$(gh release view -R Only1S/1c-ai-core --json tagName -q .tagName)"
+          gh repo clone Only1S/1c-ai-core .ones-core -- --depth 1 --branch "$TAG"
+          gh release download "$TAG" -R Only1S/1c-ai-core -p SHA256SUMS.txt -D .ones-core
+          python .ones-core/plugin/tools/setup/plugin-sums.py verify .ones-core/plugin .ones-core/SHA256SUMS.txt
+
+      - name: Ревью изменений
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          BASE_REF: ${{ github.base_ref }}
+        run: >-
+          python .ones-core/plugin/tools/service/review-bot.py --base "origin/$BASE_REF" --run
+          --plugin-dir .ones-core/plugin --out review.md
+
+      - name: Комментарий в запрос
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR" --body-file review.md

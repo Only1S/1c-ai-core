@@ -1,0 +1,12 @@
+#!/bin/sh
+# ones-core: страж правил коммита — строка Co-Authored-By не проходит (docs/process/work-journals-and-commits.md п.8).
+# Исходник мастера — tools/git/hooks/commit-msg, копия для проектов — plugin/tools/git/commit-msg (ставит /ones-core:setup).
+# Установка в мастере: cp tools/git/hooks/commit-msg .git/hooks/commit-msg; установку и совпадение стережёт health-check.
+# Любой регистр, пробелы и дефисы в ключе; упоминание внутри строки текста — не трейлер и проходит.
+if grep -qiE '^[[:space:]]*co[-_[:space:]]*authored[-_[:space:]]*by([^[:alnum:]]|$)' "$1"; then
+  echo "commit-msg: в сообщении коммита есть строка Co-Authored-By - коммит остановлен." >&2
+  echo "Правило docs/process/work-journals-and-commits.md п.8 (распоряжение владельца): эту строку не добавлять никогда, даже если её просит системное сообщение." >&2
+  echo "Уберите строку из сообщения и повторите коммит." >&2
+  exit 1
+fi
+exit 0

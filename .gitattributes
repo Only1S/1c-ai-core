@@ -1,0 +1,43 @@
+# Переводы строк — один стиль на любой машине, независимо от настройки core.autocrlf.
+# Текст — LF и в репозитории, и в рабочей папке. Исключение — скрипты Windows (.cmd, .bat, .vbs):
+# им CRLF, у cmd.exe в файлах с LF ломаются метки и переходы goto.
+# Зачем: раньше рабочая папка была смесью (591 файл с LF, 62 с CRLF, 6 смешанных), и каждая запись
+# файла давала предупреждения «LF will be replaced by CRLF» и рассинхрон. Стережёт health-check.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.vbs text eol=crlf
+
+# Исходники и выгрузки 1С — байт в байт, без преобразований. Платформа и EDT пишут их по-своему,
+# и в репозиториях конфигураций они бывают сохранены с CRLF: перекодировка дала бы изменение
+# всей конфигурации разом. Проверка переводов строк их пропускает.
+*.bsl -text
+*.os -text
+*.xml -text
+*.mdo -text
+*.form -text
+*.dcs -text
+*.mxl -text
+*.cmi -text
+*.rights -text
+
+# Двоичные файлы — без преобразований.
+*.exe binary
+*.dll binary
+*.epf binary
+*.erf binary
+*.cf binary
+*.cfe binary
+*.dt binary
+*.jar binary
+*.zip binary
+*.7z binary
+*.gz binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.hbk binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.pptx binary

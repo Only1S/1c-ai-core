@@ -1,0 +1,59 @@
+{
+  "mcpServers": {
+    "v8std": {
+      "type": "http",
+      "url": "https://ai.v8std.ru/mcp"
+    },
+    "bsl-platform": {
+      "command": "java",
+      "args": [
+        "-Dfile.encoding=UTF-8",
+        "-Dsun.stdin.encoding=UTF-8",
+        "-Dsun.stdout.encoding=UTF-8",
+        "-DLOG_FILE=${CLAUDE_PLUGIN_DATA}/logs/bsl-platform.log",
+        "-XX:ErrorFile=${CLAUDE_PLUGIN_DATA}/logs/hs_err_pid%p.log",
+        "-jar",
+        "${CLAUDE_PLUGIN_DATA}/bin/bsl-platform/mcp-bsl-context.jar",
+        "-m",
+        "stdio",
+        "-p",
+        "${ONEC_PLATFORM_BIN}"
+      ]
+    },
+    "bsl-context": {
+      "command": "python",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/tools/servers/run-bsl-context.py"
+      ]
+    },
+    "code-index": {
+      "command": "python",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/tools/servers/run-code-index.py"
+      ],
+      "env": {
+        "CODE_INDEX_HOME": "${CLAUDE_PLUGIN_DATA}/code-index"
+      }
+    },
+    "1c-forms": {
+      "command": "python",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/tools/servers/run-1c-forms.py"
+      ]
+    },
+    "1c-toolkit": {
+      "type": "http",
+      "url": "http://127.0.0.1:${ONEC_TOOLKIT_PORT:-6003}/mcp"
+    },
+    "bsl-ls": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/tools/servers/run-bsl-ls-mcp.cmd"
+    },
+    "headroom": {
+      "command": "${HEADROOM_EXE:-headroom}",
+      "args": [
+        "mcp",
+        "serve"
+      ]
+    }
+  }
+}

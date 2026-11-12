@@ -1,0 +1,89 @@
+# Сервис «инженер 1С» для команды: шаблон для репозитория конфигурации. Скопируйте в .github/workflows/agent-task.yml.
+# Issue с меткой «задача-агенту» или ручной запуск → агент с плагином → pull request. В main — только через ревью человеком.
+# Секреты репозитория: CLAUDE_CODE_OAUTH_TOKEN и ONES_CORE_TOKEN (токен с чтением канала плагина).
+# Переменная репозитория AGENT_TEAM — логины через запятую: только их issue и метки поднимают агента.
+# Подробно — docs/tools/agent-service-deploy.md.
+name: Сервис-агент (задача → PR)
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Текст задачи агенту'
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+jobs:
+  agent-task:
+    # текст issue уходит агенту с токеном подписки в окружении: и автор, и поставивший метку — только из команды
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'задача-агенту' &&
+       contains(format(',{0},', vars.AGENT_TEAM), format(',{0},', github.event.sender.login)) &&
+       contains(format(',{0},', vars.AGENT_TEAM), format(',{0},', github.event.issue.user.login)))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить Claude Code
+        env:
+          CLAUDE_VERSION: '2.1.314'   # версия и сумма обновляются вместе: docs/tools/nightwatch-deploy.md
+          CLAUDE_SHA256: 4487042b4c4f5d88d4568f68ae98aae0b1ffae58864cf57fb868641bc5f84594
+        run: |
+          curl -fsSL "https://downloads.claude.ai/claude-code-releases/$CLAUDE_VERSION/linux-x64/claude" -o claude
+          echo "$CLAUDE_SHA256  claude" | sha256sum -c -
+          install -D -m 755 claude "$HOME/.local/bin/claude"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Получить плагин ones-core
+        env:
+          GH_TOKEN: ${{ secrets.ONES_CORE_TOKEN }}
+        run: |
+          # последний выпуск по тегу, файлы сверяются с SHA256SUMS.txt его страницы Release
+          TAG="$(gh release view -R Only1S/1c-ai-core --json tagName -q .tagName)"
+          gh repo clone Only1S/1c-ai-core .ones-core -- --depth 1 --branch "$TAG"
+          gh release download "$TAG" -R Only1S/1c-ai-core -p SHA256SUMS.txt -D .ones-core
+          python .ones-core/plugin/tools/setup/plugin-sums.py verify .ones-core/plugin .ones-core/SHA256SUMS.txt
+
+      - name: Выполнить задачу агентом
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TASK_TEXT: ${{ github.event.inputs.task || github.event.issue.body }}
+        run: >-
+          python .ones-core/plugin/tools/service/agent-task.py --run --plugin-dir .ones-core/plugin
+          --out .agent-task-report.md
+
+      - name: Собрать правки в ветку и открыть PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          SKIP=(':!.ones-core' ':!.agent-task-report.md')
+          if [ -z "$(git status --porcelain -- . "${SKIP[@]}")" ]; then
+            echo 'агент не внёс правок — PR не создаётся'; exit 0
+          fi
+          BR="agent/task-${{ github.run_id }}"
+          git config user.name 'ones-core agent'
+          git config user.email 'agent@users.noreply.github.com'
+          git checkout -b "$BR"
+          git add -A -- . "${SKIP[@]}"
+          # правки агента в .github отвергаются: проверки проекта меняет только человек
+          if git diff --cached --name-only | grep -q '^\.github/'; then
+            echo 'агент изменил .github — PR не создаётся, такие правки делает человек'; exit 1
+          fi
+          # правки агента проходят ту же проверку секретов, что коммиты в проекте
+          python .ones-core/plugin/tools/git/secret-scan.py || { echo 'в правках агента найден секрет — PR не создаётся'; exit 1; }
+          git commit -m 'Сервис-агент: задача ${{ github.run_id }}'
+          git push origin "$BR"
+          gh pr create --title 'Агент: задача ${{ github.run_id }}' --body-file .agent-task-report.md \
+            --base '${{ github.event.repository.default_branch }}' --head "$BR"

@@ -1,0 +1,177 @@
+{
+  "description": "Программы инструментов ядра: откуда скачивать, какая версия, какая контрольная сумма. Обновить программу = поменять запись здесь (версию, адрес, сумму) и выпустить новую версию ядра. Суммы — SHA-256 файла релиза, как их публикует GitHub.",
+  "tools": [
+    {
+      "name": "code-index",
+      "purpose": "индексатор кода 1С — поиск по коду, вызовы и связи (MCP-сервер code-index)",
+      "version": "1.15.6",
+      "license": "MIT",
+      "repo": "Regsorm/code-index-mcp",
+      "asset": "bsl-indexer-windows-x64.zip",
+      "url": "https://github.com/Regsorm/code-index-mcp/releases/download/v1.15.6/bsl-indexer-windows-x64.zip",
+      "sha256": "7b1150d8a82a456c8a74e99b87058161adb9e8760c3bcfe1ad6055eef68fec09",
+      "kind": "zip",
+      "extract": [
+        "bsl-indexer.exe"
+      ]
+    },
+    {
+      "name": "bsl-context",
+      "purpose": "справка по встроенному языку и платформе 1С (MCP-сервер bsl-context)",
+      "version": "0.23.1",
+      "license": "MIT (с атрибуцией двух авторов)",
+      "repo": "Regsorm/bsl-context",
+      "asset": "bsl-context-windows-x64.zip",
+      "url": "https://github.com/Regsorm/bsl-context/releases/download/v0.23.1/bsl-context-windows-x64.zip",
+      "sha256": "147c2c30f8fe1406ddbee274e08aa292e730979f7dc9dafa5228c38bb9e48477",
+      "kind": "zip",
+      "extract": [
+        "bsl-context-rs.exe"
+      ]
+    },
+    {
+      "name": "bsl-analyzer",
+      "purpose": "анализатор кода 1С — автоматическая проверка после каждой правки модуля .bsl",
+      "version": "0.4.0",
+      "license": "LGPL-3.0-or-later (поставляемая сборка)",
+      "repo": "itrous/bsl-analyzer",
+      "asset": "bsl-analyzer-windows-amd64.exe",
+      "url": "https://github.com/itrous/bsl-analyzer/releases/download/v0.4.0/bsl-analyzer-windows-amd64.exe",
+      "sha256": "ca1171a07b4b06584fd062158ffc187e8d755043fba5d0b349f8a29f4e54dbcb",
+      "kind": "file",
+      "save_as": "bsl-analyzer.exe"
+    },
+    {
+      "name": "bsl-platform",
+      "purpose": "синтаксис и объектная модель платформы 1С (MCP-сервер bsl-platform; нужна Java 17 или новее)",
+      "version": "0.3.2",
+      "license": "MIT",
+      "repo": "alkoleft/mcp-bsl-platform-context",
+      "asset": "mcp-bsl-context-0.3.2.jar",
+      "url": "https://github.com/alkoleft/mcp-bsl-platform-context/releases/download/v0.3.2/mcp-bsl-context-0.3.2.jar",
+      "sha256": "5c73a00077d051300384d51cbc8d43d36948348b59afcaa0dc1ccd1b94ef371e",
+      "kind": "file",
+      "save_as": "mcp-bsl-context.jar"
+    },
+    {
+      "name": "1c-formsserver",
+      "purpose": "управляемые формы 1С: проверка, схема, сборка по описанию (MCP-сервер 1c-forms)",
+      "version": "cd3f56e",
+      "license": "MIT",
+      "repo": "Desko77/1c-formsserver",
+      "asset": "cd3f56e3508aaf34f33cdaf2c9bf1c0db9ff585a.zip",
+      "url": "https://github.com/Desko77/1c-formsserver/archive/cd3f56e3508aaf34f33cdaf2c9bf1c0db9ff585a.zip",
+      "sha256": "f57c0d8e5ad21587496f2fbd633d3102d0715ee237f09feeed7fd9f04ba2e092",
+      "kind": "tree",
+      "strip": "1c-formsserver-cd3f56e3508aaf34f33cdaf2c9bf1c0db9ff585a/",
+      "requirements": "1c-formsserver.requirements.txt"
+    },
+    {
+      "name": "mcp-toolkit",
+      "purpose": "обработка для базы 1С: через неё сервер 1c-toolkit выполняет запросы и код в тестовой базе (открывается в базе вручную)",
+      "version": "1.9.0",
+      "license": "GPL-3.0",
+      "repo": "ROCTUP/1c-mcp-toolkit",
+      "asset": "MCP_Toolkit.epf",
+      "url": "https://github.com/ROCTUP/1c-mcp-toolkit/releases/download/v1.9.0/MCP_Toolkit.epf",
+      "sha256": "aae9b09a66410ce1714537d06eb8869d8cf8b7b2b7fb5ac3f7858f0eb4678c20",
+      "kind": "file"
+    },
+    {
+      "name": "metadata-json-exporter",
+      "purpose": "обработка для базы 1С: выгружает структуру метаданных в JSON",
+      "version": "2.0.0",
+      "license": "MIT",
+      "repo": "Romandredan/1c-metadata-json-exporter",
+      "asset": "1c-metadata-json-exporter.epf",
+      "url": "https://github.com/Romandredan/1c-metadata-json-exporter/releases/download/2.0.0/1c-metadata-json-exporter.epf",
+      "sha256": "d365a4f0210155b6645875c53cc9c53bafca6e7536f3c39e0aa08fac9780cb1c",
+      "kind": "file"
+    },
+    {
+      "name": "yaxunit",
+      "purpose": "движок юнит-тестов 1С YAXUnit (расширение .cfe): команда /ones-core:tests ставит его в тестовую базу",
+      "version": "25.12",
+      "license": "Apache-2.0",
+      "repo": "bia-technologies/yaxunit",
+      "asset": "YAxUnit-25.12.cfe",
+      "url": "https://github.com/bia-technologies/yaxunit/releases/download/25.12/YAxUnit-25.12.cfe",
+      "sha256": "805a2277c997a3c24be0b0d080696479e91e4a15ed7e27aaf3991a7346522d70",
+      "kind": "file"
+    },
+    {
+      "name": "obfuscator",
+      "purpose": "закрытый движок обфускации кода 1С (машинный код): переименование, сокрытие строк, запутывание ветвлений — защита поставки",
+      "version": "channel",
+      "license": "Only1S (закрытая); сторонние — MIT и GPL-2.0 с Classpath Exception, см. THIRD-PARTY.md",
+      "optional": true,
+      "fetch": "gh-release",
+      "repo": "Only1S/1c-ai-core",
+      "asset": "obfuscator.zip",
+      "kind": "zip",
+      "verify": "inner-sha256",
+      "extract": [
+        "onescore-obfuscator.exe",
+        "tree-sitter.dll",
+        "tree-sitter-bsl.dll"
+      ]
+    },
+    {
+      "name": "onescript",
+      "purpose": "OneScript — исполнитель скриптов 1С-языка для vanessa-runner (команда /ones-core:tests vanessa); ставится явно: --only onescript vanessa-runner vanessa-add vanessa-automation",
+      "version": "2.2.0",
+      "license": "MPL-2.0",
+      "repo": "EvilBeaver/OneScript",
+      "asset": "OneScript-2.2.0-win-x64.zip",
+      "url": "https://github.com/EvilBeaver/OneScript/releases/download/v2.2.0/OneScript-2.2.0-win-x64.zip",
+      "sha256": "b12f2c44445e19d5c627f63af5cefd3eb7ad4e36b939bbd49c073e0956928267",
+      "kind": "tree",
+      "optional": true,
+      "mutable": [
+        "lib/"
+      ]
+    },
+    {
+      "name": "vanessa-runner",
+      "purpose": "vanessa-runner (vrunner) — запуск сценариев Vanessa Automation без интерфейса; пакет opm в OneScript, зависимости — из каталога OneScript без сумм",
+      "version": "3.0.2",
+      "license": "MPL-2.0",
+      "repo": "vanessa-opensource/vanessa-runner",
+      "asset": "vanessa-runner-3.0.2.ospx",
+      "url": "http://hub.oscript.io/download/vanessa-runner/vanessa-runner-3.0.2.ospx",
+      "sha256": "b4a352c6f7b3c8b23209d4b349c92ffa10b6b922b6c9a9808fe42e1ac5aca26a",
+      "kind": "opm",
+      "host": "onescript",
+      "optional": true
+    },
+    {
+      "name": "vanessa-add",
+      "purpose": "Vanessa Automation Driven Development (add, bddRunner.epf) — исполнитель сценариев .feature в клиенте 1С; пакет opm в OneScript",
+      "version": "6.9.5",
+      "license": "MPL-2.0",
+      "repo": "vanessa-opensource/add",
+      "asset": "add-6.9.5.ospx",
+      "url": "https://github.com/vanessa-opensource/add/releases/download/v6.9.5/add-6.9.5.ospx",
+      "sha256": "8b6cdd3619888834cb6b58816e6d87d7af05f0a26a15e59dec8c3a535a87c9c2",
+      "kind": "opm",
+      "host": "onescript",
+      "package": "add",
+      "optional": true
+    },
+    {
+      "name": "vanessa-automation",
+      "purpose": "Vanessa Automation — движок сценариев .feature в клиенте 1С (харнесс передаёт его vrunner ключом --bddrunner-path; add 6.9.5 не разбирает режим совместимости «Не использовать» и английские конфигурации)",
+      "version": "1.2.043.45",
+      "license": "BSD-3-Clause",
+      "repo": "Pr-Mex/vanessa-automation",
+      "asset": "vanessa-automation-single.1.2.043.45.zip",
+      "url": "https://github.com/Pr-Mex/vanessa-automation/releases/download/1.2.043.45/vanessa-automation-single.1.2.043.45.zip",
+      "sha256": "541b5a454b8997d9600b1c857ae82c2b2796c092682dded4d352818b2fd515d2",
+      "kind": "zip",
+      "extract": [
+        "vanessa-automation-single.epf"
+      ],
+      "optional": true
+    }
+  ]
+}

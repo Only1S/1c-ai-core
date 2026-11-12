@@ -1,0 +1,36 @@
+name: Сообщить о проблеме
+description: Что-то в ядре работает не так, как ожидалось
+title: "[проблема] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что сообщаете. Заполните поля ниже — по ним проблему можно повторить и исправить.
+        Из проекта это проще сделать командой `/report-issue`: она сама соберёт версию и итог проверки.
+        Не вставляйте пароли, токены, содержимое `.env` и данные базы.
+  - type: input
+    id: version
+    attributes:
+      label: Версия ядра в проекте
+      description: Строка «Последний форвард-порт из ядра» в файле docs-project/core-baseline.md, например core-v2.22.0
+      placeholder: core-v2.22.0
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Что случилось
+      description: Что вы делали и что увидели. Если была ошибка — её текст.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что ожидали
+  - type: textarea
+    id: health
+    attributes:
+      label: Итог проверки проекта
+      description: Строки с FAIL и итоговая строка из вывода tools/checks/health-check.py в вашем проекте
+      render: text
