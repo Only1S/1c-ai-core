@@ -2,7 +2,7 @@
 
 **Коротко.** Наш код и тексты — под лицензией PolyForm Noncommercial 1.0.0 ([LICENSE](LICENSE)); версии до core-v5.6.0 включительно — под MIT. Программ инструментов в репозитории нет: установщик скачивает их из официальных релизов авторов и сверяет контрольные суммы, у каждой программы — своя лицензия. Одна программа закрытая и наша — движок обфускации `obfuscator.zip`. Часть скиллов и приёмов в правилах взята у других авторов — они перечислены ниже с лицензиями.
 
-Канал ядра — два репозитория: закрытый `Only1S/1c-ai-core` для своих проектов и открытый `Only1S/1c-ai-core`. В открытый не входят скиллы `1c-standards` и `1c-platform-kb` — подробности в последнем разделе.
+Канал ядра — два репозитория: закрытый `Only1S/1c-ai-core` для своих проектов и открытый `Only1S/1c-ai-core`. Чем открытый отличается от закрытого — в последнем разделе.
 
 ## Что наше (PolyForm Noncommercial 1.0.0)
 
@@ -51,14 +51,14 @@
 |---|---|---|---|
 | инструментальные скиллы 1С в `plugin/skills/` (`cf-*`, `db-*`, `epf-*`, `form-*`, `meta-*`, `mxl-*`, `skd-*` и др.) | [Nikolay-Shirokov/cc-1c-skills](https://github.com/Nikolay-Shirokov/cc-1c-skills) | **MIT** (© 2025-2026 Nick Shirokov) | наши правки — в 16 папках (незарегистрированная база в `db-*`, запрет вызова моделью у `meta-remove` и `support-edit`, путь пользователя в `epf-build` и `web-test`); перечень — `plugin/docs/safety/vendor-patch-registry.md` |
 | хук `plugin/hooks/support-guard.py` — защита объектов на поддержке поставщика | перенос на Python хука `hooks/support-guard.mjs` из cc-1c-skills | **MIT** (© 2025-2026 Nick Shirokov) | логика и тексты отказа — поставщика; наши добавки — раскладка EDT и `Configuration.distr` |
-| скилл `1c-standards` | [SolovievHub/1c-standards-claude-skill](https://github.com/SolovievHub/1c-standards-claude-skill) | **лицензии нет** | ⛔ в открытый репозиторий не входит; наши правки номеров стандартов — в реестре правок |
+| скилл `1c-standards` | [SolovievHub/1c-standards-claude-skill](https://github.com/SolovievHub/1c-standards-claude-skill) | **лицензии нет** | ⚠ входит и в открытый репозиторий — решение и риск владельца (13.11.2026, ADR-0014); наши правки номеров стандартов — в реестре правок |
 | скилл `bsp` (БСП 3.1.11) | [brake71/1c-ssl-skills](https://github.com/brake71/1c-ssl-skills) | **MIT** (© 2026 Чекменев Д. А.) | навигатор, справочники и `bsp_api.py` |
 | скиллы `obsidian-markdown`, `obsidian-bases`, `obsidian-cli`, `json-canvas` | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | **MIT** | наши правки — русские триггеры в описаниях |
 | скиллы `archify` (3.1.0), `simplify-codebase`, `test-value` | [tt-a1i/archify](https://github.com/tt-a1i/archify), коммит `88d1ae4` | **MIT** (© 2026 tt-a1i, © 2025 Cocoon AI; © 2026 simplify-codebase contributors) | `LICENSE` и `THIRD_PARTY_NOTICES.md` — в папке каждого скилла; наши правки — русские описания, проверка обновлений в сети только по `ARCHIFY_UPDATE_CHECK_ENABLED=1`, без самоправки `test-value` (`tools/patches/archify-skills.py`). Встроенные знаки технологий — под своими лицензиями (Simple Icons, CC0 у коллекции); знак Vue.js (**CC BY-NC-SA 4.0**, некоммерческая) из набора **убран**; строка о нём в `THIRD_PARTY_NOTICES.md` вендора оставлена как есть |
 | модуль PowerShell `OneSTools.PS.TechLog` 1.1.11 в папке `tools` плагина — разбор технологического журнала 1С (`Get-TechLog`, `Sort-TechLog`, `Group-TechLog`) | [akpaevj/OneSTools.PS.TechLog](https://github.com/akpaevj/OneSTools.PS.TechLog), пакет PowerShell Gallery | **MIT** (© Akpaev E.A.) | код не изменялся; `LICENSE` — в папке модуля; наш только `Import-TechLog.ps1` (самолокующийся импорт) |
 | скилл `uuid-validate` — `scripts/check_uuid_duplicates.py` | [Desko77/claude-code-skills-1c](https://github.com/Desko77/claude-code-skills-1c) | **MIT** (© 2026 Desko77) | скрипт как есть; `SKILL.md` — наш |
 | скиллы `query-compose`, `query-optimize` — материал в `references/` | Desko77/claude-code-skills-1c | **MIT** (© 2026 Desko77) | `SKILL.md` — наши; источник указан в шапке каждого файла |
-| скилл `1c-platform-kb` — база знаний по платформе 1С и окружению (149 статей) | база знаний администратора владельца: конспекты документации ИТС 8.3.27 и методичек ИТС своими словами, статьи по PostgreSQL, MS SQL, Linux, Windows, Apache, IIS, Kafka, RabbitMQ | **конспекты ИТС — пересказ платного материала по подписке владельца** | ⛔ убрать перед открытием репозитория; в закрытом канале и проектах владельца — можно; дословных текстов ИТС нет; снимок — `tools/indexes/sync-platform-kb.py`; в открытый репозиторий не входит |
+| скилл `1c-platform-kb` — база знаний по платформе 1С и окружению (149 статей) | база знаний администратора владельца: конспекты документации ИТС 8.3.27 и методичек ИТС своими словами, статьи по PostgreSQL, MS SQL, Linux, Windows, Apache, IIS, Kafka, RabbitMQ | **конспекты ИТС — пересказ платного материала по подписке владельца** | ⛔ убрать перед открытием репозитория; в закрытом канале и проектах владельца — можно; дословных текстов ИТС нет; снимок — `tools/indexes/sync-platform-kb.py`; с 13.11.2026 входит и в открытый репозиторий — решение владельца (ADR-0014) |
 | скилл `form-ordinary` — обычные формы: `form.frm` ⇄ JSON, правка, проверка, отрисовка, `Form.bin` | [dreamadv81/form-ordinary](https://github.com/dreamadv81/form-ordinary), коммит `3c51f01` | **MIT** | `LICENSE` — в папке скилла; **картинки платформы (`frm_codec/data/platform_pictures/`, права фирмы «1С») не включены** — оставлен только `index.json` с их именами и кодами, отрисовка рисует серые квадраты; свои картинки — переменной `FRM_PLATFORM_PICTURES` |
 | скилл `cf-vendor-update` — обновление доработанной типовой на новый релиз | **наш** | MIT | по идее `alonehobo/1c-cf-vendor-merge` (лицензии нет): код не брался, грабли в `docs/platform/vendor-release-update.md` — пересказ |
 | скилл `form-bin-module` — `scripts/form_bin_module.py` | [Caponid/1c-form-tools](https://github.com/Caponid/1c-form-tools) | **MIT** (© 2025 Caponid) | перенос с изменениями; текст лицензии — в шапке скрипта |
@@ -81,11 +81,12 @@
 
 Каждый выпуск кладётся в открытый репозиторий снимком того же содержимого, что в закрытом канале, со следующими отличиями (12.11.2026):
 
-1. Скилла `1c-standards` в снимке нет — у источника нет лицензии.
-2. Скилла `1c-platform-kb` в снимке нет — конспекты ИТС пересказывают платный материал по подписке владельца.
+1. Скилл `1c-standards` входит в снимок по решению владельца 13.11.2026 (ADR-0014). У источника нет лицензии — риск публикации владелец принял на себя.
+2. Скилл `1c-platform-kb` входит в снимок по решению владельца 13.11.2026 (ADR-0014): конспекты ИТС и методичек своими словами, дословных текстов нет.
 3. Пересказы под CC BY-SA 4.0 (`config-git-forks-and-merges`, `bug-diagnosis-loop`, `two-axis-code-review`) сверены 12.11.2026: общих цепочек из 8 слов подряд с текстами источников нет (yellow-hammer/dev-rules — 70 файлов, trailofbits/skills — 209 файлов).
 4. Указание авторов MIT-компонентов сохранено (эта страница и шапки файлов).
 5. Закрытый движок обфускации `obfuscator.zip` к открытому Release не прикладывается.
+6. README открытого репозитория — свой, короткий (`README.public.md` мастера).
 
 <details><summary>Для мастера ядра (dev_core)</summary>
 
