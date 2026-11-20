@@ -9,12 +9,13 @@ import re
 
 NAME = r"[\wА-Яа-яЁё]+"
 MASK = "\0"
-_IF = re.compile(r"^\s*Если\b(?P<c>.*?)\bТогда\b", re.I)
-_ELSIF = re.compile(r"^\s*ИначеЕсли\b(?P<c>.*?)\bТогда\b", re.I)
-_ELSE = re.compile(r"^\s*Иначе\b\s*$", re.I)
-_ENDIF = re.compile(r"^\s*КонецЕсли\b", re.I)
-_HEAD = re.compile(r"^\s*(?:Процедура|Функция)\s+(?P<name>[\wА-Яа-яЁё]+)\s*\((?P<params>[^)]*)\)?", re.I)      # заголовок бывает на нескольких строках: скобка на первой не закрыта
-_END = re.compile(r"^\s*Конец(?:Процедуры|Функции)\b", re.I)
+# dev_core form-ordinary-english-variant: ключевые слова обоих вариантов встроенного языка
+_IF = re.compile(r"^\s*(?:Если|If)\b(?P<c>.*?)\b(?:Тогда|Then)\b", re.I)
+_ELSIF = re.compile(r"^\s*(?:ИначеЕсли|ElsIf)\b(?P<c>.*?)\b(?:Тогда|Then)\b", re.I)
+_ELSE = re.compile(r"^\s*(?:Иначе|Else)\b\s*$", re.I)
+_ENDIF = re.compile(r"^\s*(?:КонецЕсли|EndIf)\b", re.I)
+_HEAD = re.compile(r"^\s*(?:Процедура|Функция|Procedure|Function)\s+(?P<name>[\wА-Яа-яЁё]+)\s*\((?P<params>[^)]*)\)?", re.I)      # заголовок бывает на нескольких строках: скобка на первой не закрыта
+_END = re.compile(r"^\s*(?:Конец(?:Процедуры|Функции)|End(?:Procedure|Function))\b", re.I)
 _VAR = re.compile(r"(?:Перем|Var)\b", re.I)
 SHOWN = 90          # знаков условия и выражения в перечне
 
@@ -130,7 +131,7 @@ def procedures_of(lines):
         if head:
             if current is not None:
                 out.append(current)
-            current = [head.group("name"), [p.strip().split("=")[0].replace("Знач ", "").strip() for p in head.group("params").split(",") if p.strip()], number, None]
+            current = [head.group("name"), [re.sub(r"^(?:Знач|Val)\s+", "", p.strip().split("=")[0], flags=re.I).strip() for p in head.group("params").split(",") if p.strip()], number, None]
         elif _END.match(masked) and current is not None:
             current[3] = number
             out.append(current)

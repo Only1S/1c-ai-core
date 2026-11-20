@@ -107,7 +107,8 @@ def turn(sg, root, sid, agent, answer):
         return {'found': False, 'calls': 0, 'edits': None, 'missing': [], 'ran': []}
     calls = got[0]
     gs = sg.guard_skills()
-    res = sg.gate_missing(calls, gs, root)
+    # как гейт конца хода: начало хода (закоммиченное в ходе — не C0) и файлы, записанные командами оболочки
+    res = sg.gate_missing(calls, gs, root, sg.shell_armed(root, sid, got[2]) or {}, got[2])
     return {'found': True, 'calls': len(calls), 'edits': res[1] if res else None, 'missing': res[0] if res else [],
             'ran': checks_ran(sg, calls, gs, root)}
 

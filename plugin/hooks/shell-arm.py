@@ -10,7 +10,8 @@
   в `status` не попадают; грязный до команды и ею не тронутый файл отсекается временем записи.
 
 stop-guard требует для них те же проверки, что для правки инструментом (до 5 модулей — validate_module по каждому, больше —
-пакетная проверка). Любой сбой хука — пропуск (код 0): гейт не должен мешать работе из-за своей поломки.
+пакетная проверка). Любой сбой хука — пропуск (код 0): гейт не должен мешать работе из-за своей поломки; но не молча —
+systemMessage с пометкой DEGRADED (контракт деградации, с 20.11.2026), в том числе когда git status дерева не ответил.
 """
 import importlib.util
 import json
@@ -25,6 +26,10 @@ SHELL_STATE = os.path.join('logs', 'shell-arm.json')   # путь состоян
 PENDING_TTL = 6 * 3600     # незавершённые записи старше — выбрасываются
 ROWS_MAX = 400             # записей взвода на сессию
 GIT = ['git', '--no-optional-locks', '-c', 'core.quotepath=off']   # без записи .git/index: не спорим за блокировку с git агента
+# Сроки git: в сумме меньше таймаута хука в hooks.json (30 с), иначе Claude Code снимет хук раньше, чем он назовёт сбой
+GIT_TOP_TIMEOUT = 5
+GIT_STATUS_TIMEOUT = 15
+REPLACE_TRIES = 20         # подмена файла состояния: до ~1 с, пока другой процесс держит его открытым
 # Проверки ядра идут в фоне по правилу run-checks-quietly-in-background и исходники 1С проекта не пишут: подсказка им — шум.
 QUIET_BACKGROUND = re.compile(r'(health-check|contour-tests|mcp-smoke|weekly-check|release-core|build-plugin|run-tests|'
                               r'run-scenario|plugin-eval|gen-doc-index|gen-contour-registry)\.py\b', re.I)
@@ -47,17 +52,22 @@ def load_sg():
     return mod
 
 
+TIMEOUT = object()   # git не ответил в срок — в отличие от None (ненулевой код: не репозиторий и т. п.)
+
+
 def run_all(argvs, timeout=60):
-    """Команды git параллельно (у тяжёлого проекта пять деревьев по ~0,2 с — последовательно было бы секунду на каждый вызов)."""
+    """Команды git параллельно (у тяжёлого проекта пять деревьев по ~0,2 с — последовательно было бы секунду на каждый вызов).
+    Срок общий на все команды, а не на каждую: ожидания по деревьям не складываются."""
     procs = [subprocess.Popen(a, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) for a in argvs]
+    end = time.monotonic() + timeout
     out = []
     for p in procs:
         try:
-            data, _ = p.communicate(timeout=timeout)
+            data, _ = p.communicate(timeout=max(0.1, end - time.monotonic()))
             out.append(data if p.returncode == 0 else None)
         except subprocess.TimeoutExpired:
             p.kill()
-            out.append(None)
+            out.append(TIMEOUT)
     return out
 
 
@@ -77,27 +87,34 @@ def parse_porcelain(raw):
 
 
 def tops_of(sg, root):
+    """(деревья git рабочих папок, папки, где git не ответил в срок)."""
     dirs = []
     for t in sg.work_tops(root):
         p = t if os.path.isdir(t) else os.path.dirname(t)
         if os.path.isdir(p) and p not in dirs:
             dirs.append(p)
-    seen = []
-    for r in run_all([GIT + ['-C', p, 'rev-parse', '--show-toplevel'] for p in dirs], timeout=10):
+    seen, lost = [], []
+    for p, r in zip(dirs, run_all([GIT + ['-C', p, 'rev-parse', '--show-toplevel'] for p in dirs], timeout=GIT_TOP_TIMEOUT)):
+        if r is TIMEOUT:
+            lost.append(p)
+            continue
         top = r.decode('utf-8', 'replace').strip() if r else ''
         if top and top not in seen:
             seen.append(top)
-    return seen
+    return seen, lost
 
 
 def written_1c(sg, root, t0):
-    """Файлы 1С рабочих деревьев, изменённые или новые и записанные не раньше t0: абсолютные пути."""
+    """Файлы 1С рабочих деревьев, изменённые или новые и записанные не раньше t0: (абсолютные пути, деревья, где git status
+    не ответил)."""
     gs = sg.guard_skills()
-    tops = tops_of(sg, root)
-    raws = run_all([GIT + ['-C', t, 'status', '--porcelain', '-z', '--untracked-files=all'] for t in tops])
+    tops, lost = tops_of(sg, root)
+    raws = run_all([GIT + ['-C', t, 'status', '--porcelain', '-z', '--untracked-files=all'] for t in tops],
+                   timeout=GIT_STATUS_TIMEOUT)
     files = []
+    lost += [top for top, raw in zip(tops, raws) if raw is None or raw is TIMEOUT]
     for top, raw in zip(tops, raws):
-        for rel in parse_porcelain(raw) if raw is not None else []:
+        for rel in parse_porcelain(raw) if raw is not None and raw is not TIMEOUT else []:
             full = os.path.join(top, rel)
             if not sg.is_1c(sg.norm(full), gs):
                 continue
@@ -106,7 +123,7 @@ def written_1c(sg, root, t0):
                     files.append(full.replace('\\', '/'))
             except OSError:
                 continue
-    return sorted(set(files))
+    return sorted(set(files)), lost
 
 
 def load_state(path):
@@ -123,7 +140,27 @@ def save_state(path, st):
     tmp = path + '.%d.tmp' % os.getpid()
     with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(st, f, ensure_ascii=False, indent=0)
-    os.replace(tmp, path)
+    replace_retry(tmp, path)
+
+
+def replace_retry(tmp, path):
+    """os.replace с повтором: на Windows файл, открытый другим процессом (stop-guard читает состояние на Stop), подменить
+    нельзя, пока его не закроют (PermissionError). Не вышло за все попытки — tmp убирается, ошибка поднимается."""
+    try:
+        for k in range(REPLACE_TRIES):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if k + 1 == REPLACE_TRIES:
+                    raise
+                time.sleep(0.05)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def update_state(path, change):
@@ -188,7 +225,7 @@ def main():
     pend = update_state(path, lambda st: (st.get('_pending') or {}).pop(tid, None))
     if not isinstance(pend, dict):
         return 0
-    files = written_1c(load_sg(), root, float(pend.get('t0') or 0))      # долгий git status — вне замка
+    files, lost = written_1c(load_sg(), root, float(pend.get('t0') or 0))      # долгий git status — вне замка
     if files:
         def arm(st):
             rec = st.setdefault(sid, {})
@@ -196,12 +233,17 @@ def main():
             rows.append({'cmd': pend.get('cmd'), 'files': files, 'ts': time.time()})
             rec['armed'] = rows[-ROWS_MAX:]
         update_state(path, arm)
+    if lost:
+        raise RuntimeError('git status не ответил (ошибка или срок %d с): %s' % (GIT_STATUS_TIMEOUT, ', '.join(lost)))
     return 0
 
 
 if __name__ == '__main__':
     try:
         code = main()
-    except Exception:
+    except Exception as e:
+        sys.stdout.buffer.write(json.dumps({'systemMessage': 'shell-arm: DEGRADED — внутренняя ошибка, запись файлов 1С командой '
+                                            'не проверена: %s' % e}, ensure_ascii=False).encode('utf-8'))
+        sys.stdout.flush()
         code = 0
     sys.exit(code)

@@ -3,9 +3,12 @@
 Перенос validate-bsl.ps1 на Python (ADR-0002) один к одному; сверяется проверками contour-tests (раздел 1).
   1. Анализатор bsl-analyzer: ошибка или предупреждение (error, warning — с 05.11.2026; note — нет) в СТРОКАХ ПРАВКИ блокирует
      (с 17.10.2026; прежние замечания модуля вне правки — подсказка модели без блокировки «свой код исправь в этой же задаче»,
-     то же для смешения алфавитов; запись через EDT целиком — как раньше, весь файл) (код 2 + текст в stderr —
-     модель видит причину и исправляет). Семейства, которые на одиночном файле дают ложные срабатывания
-     (метаданные не резолвятся), не блокируют — их список ниже, расширять только с замером.
+     то же для смешения алфавитов; запись через EDT — по записанному source, mode=replace — весь файл) (код 2 + текст в stderr —
+     модель видит причину и исправляет). Находка вне строк правки, которой не было в тексте до правки (originalFile или
+     обратное наложение кусков; ключ — правило и текст сообщения), — тоже блок: удаление «КонецЕсли;» ломает чужую строку.
+     Семейства, которые на одиночном файле дают ложные срабатывания (метаданные не резолвятся), не блокируют — их список
+     ниже, расширять только с замером. Модуль формы EDT (Form.form рядом): анализ копии по пути формы Конфигуратора и снятие
+     Unused* по обработчикам и реквизитам из Form.form (Only1S/1c-ai-core#5). Все блокирующие находки правки — разом.
   2. Языковой профиль: смешение кириллицы и латиницы в одном имени блокирует; латинские сокращения из имён
      самой платформы (ЧтениеXML, HTTPСоединение) нарушением не считаются.
   0. Правка .bsl отмечается в logs/gate-state.json проекта: в конце хода напомнят записать прогон проверок
@@ -16,18 +19,22 @@
   3. Бюджет комментариев (с 17.10.2026, comment-budget): нарушения аудита tools/1c/bsl-comment-audit.py — только
      в строках, записанных этой правкой (куски structuredPatch, иначе место new_string; новый файл — целиком), —
      блокирующий фидбек. Маркеры вставок в типовые (// <--, // -->, //++, //--) нарушением не считаются;
-     запись модуля через EDT целиком (write_module_source) не проверяется — своё от поставщика там не отличить.
+     запись модуля через EDT целиком (write_module_source, mode=replace) не проверяется — своё от поставщика там не отличить.
   4. Часовой анализатора (с 10.11.2026, по мотивам 1c-quality-gate): анализатор не нашёл в модуле ничего — тем же вызовом
      прогоняется образец с заведомой ошибкой; молчит и на нём — DEGRADED «вердикт недостоверен» владельцу и модели вместо
-     зелёного. Успех помнится в logs/analyzer-sentinel.json на сессию, лаунчер и версию движка.
+     зелёного. Успех помнится в logs/analyzer-sentinel.json на сессию, лаунчер, версию движка и версию самого хука.
   5. Гигиена файла (с 10.11.2026, по мотивам 1c-quality-gate) — блокирует: в строках правки управляющие символы и невидимые
      знаки (нулевой ширины, смены направления), тире «–», «—», «−» в коде вне строк и комментариев; строка правки с другим
-     переводом строки, чем у файла; снятый BOM у модуля, у которого он был в HEAD. Замер 10.11.2026: 4991 модуль двух рабочих
-     конфигураций целиком — 12 находок, все U+200B в комментариях машинного перевода; тире и смешанных переводов — ноль.
+     переводом строки, чем у файла; снятый BOM у модуля, у которого он был в HEAD; файл не в UTF-8 (остальные проверки тогда
+     не идут). Замер 10.11.2026: 4991 модуль двух рабочих конфигураций целиком — 12 находок, все U+200B в комментариях
+     машинного перевода; тире и смешанных переводов — ноль.
+  6. Тест YAXUnit (модуль с ИсполняемыеСценарии): правка сняла ЮТест.ОжидаетЧто или регистрацию теста либо добавила
+     ЮТест.Пропустить — подсказка модели «красный тест чинится кодом» (bug-diagnosis-loop Ф5), не блок.
 Где анализатор: в плагине — ${CLAUDE_PLUGIN_DATA}/bin/bsl-analyzer/bsl-analyzer.exe (ставит install-tools.py);
 без плагина (в мастере ядра) — та же стандартная папка данных плагина в профиле пользователя, затем прежний tools/bsl-analyzer.exe.
 Не видит: .bsl, записанный через Bash или скрипты скиллов, — его видит гейт конца хода через shell-arm.py (с 10.11.2026).
-Любая внутренняя ошибка — пропуск с пометкой DEGRADED (молчаливый пропуск неотличим от «замечаний нет»).
+Любая внутренняя ошибка, нет анализатора или его отчёта, запись EDT без найденного модуля — пропуск с пометкой DEGRADED
+владельцу и модели (молчаливый пропуск неотличим от «замечаний нет»).
 """
 import datetime
 import importlib.util
@@ -39,6 +46,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 
 FALSE_FAMILIES = r'^(QueryToMissingMetadata|UnresolvedMethodCall|MissingCommonModule|UnresolvedField|InvalidCharacterInFile)$'
 PLATFORM_ABBR = {'HTTP', 'HTTPS', 'XML', 'XDTO', 'JSON', 'XSD', 'XSLT', 'COM', 'WS', 'WSDL', 'SOAP', 'FTP', 'FTPS', 'HTML', 'XHTML',
@@ -59,6 +67,10 @@ PLATFORM_NAMES = {x.upper() for x in (
 CYR = 'Ѐ-ӿ'
 HERE = os.path.dirname(os.path.abspath(__file__))
 INSERT_MARKER = r'^\s*//\s*(<--|-->|\+\+|--)'
+UNCHECKED = ' — не считай модуль проверенным: проверь его validate_module и скажи владельцу'
+# Хук ограничен 60 с (hooks.json): прогон по правке, текст до правки или образец часового — все в одном сроке от начала main
+ANALYZER_BUDGET = 52
+DEADLINE = None
 
 
 def err(text):
@@ -69,15 +81,18 @@ def err(text):
 SYSTEM, CONTEXT = [], []   # сообщения копятся и выводятся одним JSON в конце: два объекта подряд Claude Code не разберёт
 
 
-def degraded(text):
-    """Пропуск без проверки — видимо (systemMessage при коде 0), а не только в отладочный журнал."""
+def degraded(text, model=False):
+    """Пропуск без проверки — видимо (systemMessage при коде 0), а не только в отладочный журнал; model — и модели."""
     SYSTEM.append(text)
+    if model:
+        CONTEXT.append(text + UNCHECKED)
 
 
 def emit(code):
     """При коде 2 до модели доходит только stderr — туда же и накопленное; при коде 0 — один JSON."""
     if code == 2:
-        for text in SYSTEM + CONTEXT:
+        # пометка, ушедшая и модели (degraded model=True), печатается один раз — с хвостом UNCHECKED
+        for text in [s for s in SYSTEM if s + UNCHECKED not in CONTEXT] + CONTEXT:
             err(text)
         return
     out = {}
@@ -204,16 +219,50 @@ def arm_gate(j, root, f):
         pass
 
 
-def run_analyzer(exe, f):
+def project_config(d):
+    """Настройки анализатора проекта: ближайший сверху файл, имена — в порядке поставщика; None — нет."""
+    while True:
+        for name in ('bsl-analyzer.toml', '.bsl-analyzer.json', '.bsl-language-server.json'):
+            if os.path.isfile(os.path.join(d, name)):
+                return os.path.join(d, name)
+        up = os.path.dirname(d)
+        if up == d:
+            return None
+        d = up
+
+
+def run_analyzer(exe, f, text=None):
     """Ошибки и предупреждения (error, warning; note — нет) в правленном файле без семейств ложных срабатываний; None — отчёта нет.
+    text — анализ копии с этим текстом вместо файла (текст до правки).
     Предупреждения — с 05.11.2026, решение владельца: «ошибки и предупреждения нужно обязательно исправлять, нельзя пропускать»."""
     d = os.path.dirname(f)
     tmp = os.path.join(tempfile.gettempdir(), 'bslhook_%d' % os.getpid())
     shutil.rmtree(tmp, ignore_errors=True)
+    src, cfg = d, []
     try:
+        # модуль формы EDT (Form.form рядом): модуль формы движок узнаёт только по пути Forms/<Ф>/Ext/Form/Module.bsl
+        edt_form = os.path.basename(f).lower() == 'module.bsl' and os.path.isfile(os.path.join(d, 'Form.form'))
+        if edt_form or text is not None:
+            # копия — под теми же последними папками пути (по ним движок узнаёт вид модуля), Form.xml формы — уровнем выше
+            parts = ['Forms', 'F', 'Ext', 'Form'] if edt_form else [p for p in re.split(r'[\\/]', os.path.splitdrive(d)[1]) if p][-4:]
+            src = os.path.join(tmp, 'src', *parts)
+            os.makedirs(src)
+            if text is None:
+                shutil.copyfile(f, os.path.join(src, os.path.basename(f)))
+            else:
+                with open(f, 'rb') as fh:
+                    bom = fh.read(3) == b'\xef\xbb\xbf' and not text.startswith('\ufeff')
+                with open(os.path.join(src, os.path.basename(f)), 'wb') as fh:
+                    fh.write((b'\xef\xbb\xbf' if bom else b'') + text.encode('utf-8'))
+            form_xml = os.path.join(os.path.dirname(d), 'Form.xml')
+            if not edt_form and os.path.isfile(form_xml):
+                shutil.copyfile(form_xml, os.path.join(os.path.dirname(src), 'Form.xml'))
+            conf = project_config(d)
+            cfg = ['-c', conf] if conf else []   # копия во временной папке иначе теряет настройки проекта
+        left = 55 if DEADLINE is None else max(1, min(55, DEADLINE - time.time()))
         # --changed-files — путь ОТНОСИТЕЛЬНО -s: с абсолютным анализатор молча находит 0 замечаний
-        subprocess.run([exe, 'analyze', '--incremental', '-s', d, '--changed-files', os.path.basename(f),
-                        '-r', 'sarif', '-o', tmp, '-q'], capture_output=True, timeout=55)
+        subprocess.run([exe, 'analyze', '--incremental', '-s', src, '--changed-files', os.path.basename(f),
+                        '-r', 'sarif', '-o', tmp, '-q'] + cfg, capture_output=True, timeout=left)
         rep = os.path.join(tmp, 'bsl-analyzer.sarif')
         if not os.path.isfile(rep):
             return None
@@ -222,6 +271,8 @@ def run_analyzer(exe, f):
                 s = json.load(fh)
         except (OSError, ValueError):
             return None
+    except subprocess.TimeoutExpired:
+        return None
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     leaf = re.escape(os.path.basename(f))
@@ -234,7 +285,51 @@ def run_analyzer(exe, f):
             uri = ''
         if r.get('level') in ('error', 'warning') and not re.search(FALSE_FAMILIES, str(r.get('ruleId') or ''), re.I) and re.search(leaf, uri, re.I):
             errs.append(r)
+    errs, dropped = drop_edt_form_false(f, errs, text)
+    if dropped and text is None:
+        CONTEXT.append('bsl-analyzer: снято %d находок Unused* по Form.form — обработчики и реквизиты формы EDT, привязку которых '
+                       'движок не читает (Only1S/1c-ai-core#5)' % dropped)
     return errs
+
+
+METHOD = re.compile(r'^\s*(?:Асинх\s+|Async\s+)?(?:Процедура|Функция|Procedure|Function)\s+(\w+)\s*\(', re.I)
+
+
+def drop_edt_form_false(f, errs, text=None):
+    """Модуль формы EDT: снять Unused* по обработчикам событий и команд и по реквизитам из соседнего Form.form — движок его
+    не читает (Only1S/1c-ai-core#5); (оставшиеся, сколько снято). Form.form не разобран — ничего не снимается."""
+    form = os.path.join(os.path.dirname(f), 'Form.form')
+    if not errs or os.path.basename(f).lower() != 'module.bsl' or not os.path.isfile(form):
+        return errs, 0
+    import xml.etree.ElementTree as ET   # здесь, а не в начале: разбор нужен только модулю формы EDT
+    try:
+        root = ET.parse(form).getroot()
+    except (OSError, ET.ParseError):
+        return errs, 0
+    handlers = {(e.findtext('name') or '').strip().lower() for tag in ('handlers', 'handler') for e in root.iter(tag)} - {''}
+    attrs = {(e.findtext('name') or '').strip().lower() for e in root.findall('attributes')} - {''}
+    if text is None:
+        with open(f, encoding='utf-8-sig') as fh:
+            text = fh.read()
+    lines = text.split('\n')
+
+    def ident(e):
+        try:
+            r = e['locations'][0]['physicalLocation']['region']
+            return lines[int(r['startLine']) - 1][int(r['startColumn']) - 1:int(r['endColumn']) - 1].strip().lower()
+        except (KeyError, IndexError, TypeError, ValueError):
+            return ''
+
+    def owner(n):
+        for k in range(min(n, len(lines)) - 1, -1, -1):
+            mt = METHOD.match(lines[k])
+            if mt:
+                return mt.group(1).lower()
+        return ''
+    keep = [e for e in errs if not ((e.get('ruleId') == 'UnusedLocalMethod' and ident(e) in handlers)
+                                    or (e.get('ruleId') in ('UnusedLocalVariable', 'UninitializedLocalVariable') and ident(e) in attrs)
+                                    or (e.get('ruleId') == 'UnusedParameters' and owner(error_line(e)) in handlers))]
+    return keep, len(errs) - len(keep)
 
 
 # Часовой анализатора (с 10.11.2026, по мотивам 1c-quality-gate): «замечаний нет» верно, только если анализатор находит заведомую
@@ -257,7 +352,8 @@ def analyzer_alive(exe, state_dir, sid):
     """True — анализатор нашёл ошибку образца (или нашёл её раньше в этой сессии), False — молчит."""
     try:
         st = os.stat(exe)
-        key = '%s|%d|%d|%s' % (sid, st.st_size, int(st.st_mtime), engine_version())
+        # mtime хука: правка вызова анализатора посреди сессии (мастер запускает хук прямо из репозитория) сбрасывает успех
+        key = '%s|%d|%d|%s|%d' % (sid, st.st_size, int(st.st_mtime), engine_version(), int(os.path.getmtime(__file__)))
     except OSError:
         key = ''
     path = os.path.join(state_dir, 'analyzer-sentinel.json')
@@ -294,20 +390,22 @@ def error_line(e):
 
 
 class _Nothing(frozenset):
-    """Правка ничего не записала: кусок правки есть, строк «+» в нём нет (только удаление)."""
+    """Правка ничего не записала: кусок правки без строк «+» (только удаление), Write без изменений, удаление через EDT."""
 
 
 NOTHING = _Nothing()
 
 
 def written_lines(j, f):
-    """Номера строк, записанных правкой: None — файл новый (весь свой), NOTHING — правка только удаляла,
+    """Номера строк, записанных правкой: None — файл новый (весь свой), NOTHING — правка ничего не записала,
     пустое множество — определить нельзя."""
     resp = j.get('tool_response')
     if isinstance(resp, dict):
         if resp.get('type') == 'create':
             return None
         patch = resp.get('structuredPatch')
+        if resp.get('type') == 'update' and patch == []:
+            return NOTHING   # Write того же содержимого: кусков нет, а не «весь файл»
         if isinstance(patch, list) and patch:
             added = set()
             for hunk in patch:
@@ -319,7 +417,12 @@ def written_lines(j, f):
                     elif not line.startswith(('-', '\\')):
                         n += 1
             return added or NOTHING   # Issue Only1S/1c-ai-core#4: без «+» правка ничего не записала, а не «определить нельзя»
-    new = str((j.get('tool_input') or {}).get('new_string') or '')
+    ti = j.get('tool_input') or {}
+    # запись EDT (write_module_source): source — как new_string, кроме mode=replace (весь модуль); searchReplace — режим по умолчанию
+    if ti.get('oldSource') and not str(ti.get('source') or '').strip() and (ti.get('mode') or 'searchReplace') == 'searchReplace':
+        return NOTHING
+    # файл читается в текстовом режиме (CRLF → LF): source с CRLF иначе не нашёлся бы и судился бы весь файл
+    new = str(ti.get('new_string') or (ti.get('source') if ti.get('mode') != 'replace' else '') or '').replace('\r\n', '\n')
     if new.strip():
         with open(f, encoding='utf-8-sig') as fh:
             text = fh.read()
@@ -331,10 +434,52 @@ def written_lines(j, f):
 
 
 def replaced_text(j):
-    """Текст, который правка заменила: снятые строки кусков правки и old_string."""
+    """Текст, который правка заменила: снятые строки кусков правки, old_string и oldSource записи EDT."""
     resp = j.get('tool_response') if isinstance(j.get('tool_response'), dict) else {}
     gone = [ln[1:] for hunk in resp.get('structuredPatch') or [] for ln in (hunk or {}).get('lines') or [] if ln.startswith('-')]
-    return '\n'.join(gone + [str((j.get('tool_input') or {}).get('old_string') or '')])
+    ti = j.get('tool_input') or {}
+    return '\n'.join(gone + [str(ti.get('old_string') or ''), str(ti.get('oldSource') or '')])
+
+
+def before_text(j, f):
+    """Текст модуля до правки: originalFile ответа инструмента, иначе обратное наложение кусков правки; None — не восстановить."""
+    resp = j.get('tool_response')
+    if not isinstance(resp, dict) or resp.get('type') == 'create':
+        return None
+    if isinstance(resp.get('originalFile'), str):
+        return resp['originalFile']
+    patch = resp.get('structuredPatch')
+    if not isinstance(patch, list):
+        return None
+    with open(f, encoding='utf-8-sig') as fh:
+        lines = fh.read().split('\n')
+    # с конца файла: куски выше не сдвигаются; newLines=0 — строки «до» встают перед строкой newStart
+    for hunk in sorted((h for h in patch if isinstance(h, dict)), key=lambda h: int(h.get('newStart') or 1), reverse=True):
+        at = max(int(hunk.get('newStart') or 1) - 1, 0)
+        lines[at:at + int(hunk.get('newLines') or 0)] = [ln[1:].rstrip('\r') for ln in hunk.get('lines') or [] if ln.startswith((' ', '-'))]
+    return '\n'.join(lines)
+
+
+TEST_CHECKS = re.compile(r'ОжидаетЧто|Добавить\w*Тест\s*\(')
+TEST_SKIP = re.compile(r'ЮТест\.Пропустить\s*\(')
+
+
+def weakened_test(j, f):
+    """Модуль YAXUnit: правка сняла утверждения или регистрацию тестов либо добавила ЮТест.Пропустить. Снятое и записанное —
+    из одного источника: строки «-» и «+» кусков правки, иначе old_string и new_string."""
+    with open(f, encoding='utf-8-sig') as fh:
+        if 'ИсполняемыеСценарии' not in fh.read():
+            return False
+    resp = j.get('tool_response') if isinstance(j.get('tool_response'), dict) else {}
+    patch = resp.get('structuredPatch')
+    if isinstance(patch, list) and patch:
+        lines = [ln for hunk in patch for ln in (hunk or {}).get('lines') or []]
+        gone, put = '\n'.join(ln[1:] for ln in lines if ln.startswith('-')), '\n'.join(ln[1:] for ln in lines if ln.startswith('+'))
+    else:
+        ti = j.get('tool_input') or {}
+        gone, put = str(ti.get('old_string') or ''), str(ti.get('new_string') or '')
+    return (len(TEST_CHECKS.findall(gone)) > len(TEST_CHECKS.findall(put))
+            or len(TEST_SKIP.findall(put)) > len(TEST_SKIP.findall(gone)))
 
 
 def comment_budget(j, f):
@@ -458,7 +603,35 @@ def mixed_identifiers(f):
     return found
 
 
+def grown(exe, f, before, errs, new, old):
+    """Прежние находки, которых в тексте до правки было меньше (ключ — правило и текст сообщения); None — текст до правки
+    не разобран."""
+    prev = run_analyzer(exe, f, before)
+    if prev is None:
+        return None
+
+    def key(e):
+        # числа из текста убраны: у MethodSize и подобных в сообщении длина, она меняется от любой правки внутри метода
+        return str(e.get('ruleId')), re.sub(r'\d+', '#', str((e.get('message') or {}).get('text')))
+    was, now, inline = Counter(map(key, prev)), Counter(map(key, errs)), Counter(map(key, new))
+    out = []
+    for e in old:
+        if now[key(e)] - was[key(e)] - inline[key(e)] > 0:
+            out.append(e)
+            inline[key(e)] += 1
+    return out
+
+
 def main():
+    global DEADLINE
+    DEADLINE = time.time() + ANALYZER_BUDGET
+    try:
+        return check()
+    finally:
+        DEADLINE = None
+
+
+def check():
     raw = sys.stdin.buffer.read().decode('utf-8', 'replace').lstrip('\ufeff')
     try:
         j = json.loads(raw)
@@ -466,22 +639,39 @@ def main():
         degraded('validate-bsl: DEGRADED — вход не разобран как JSON, правка пропущена без проверки')
         return 0
     root = os.environ.get('CLAUDE_PROJECT_DIR', '')
-    f = (j.get('tool_input') or {}).get('file_path') or (j.get('tool_response') or {}).get('filePath')
+    resp = j.get('tool_response')
+    # ответ MCP-инструмента (write_module_source) — список текстовых блоков, не словарь
+    f = (j.get('tool_input') or {}).get('file_path') or (resp.get('filePath') if isinstance(resp, dict) else None)
     if not f:
         f = resolve_module_path(j, root)
+        if not f and 'write_module_source' in str(j.get('tool_name') or ''):
+            degraded('validate-bsl: DEGRADED — запись через EDT, модуль на диске не найден (нет modulePath, его нет в исходниках '
+                     'проекта или файл не менялся последние 120 с) — модуль НЕ проверен', model=True)
+            return 0
     if not f or not re.search(r'\.bsl$', f, re.I) or not os.path.isfile(f):
         return 0
 
     arm_gate(j, root, f)
     outside_src(f, root, j)
+    # кодировка — до всех чтений текста: модуль не в UTF-8 ронял хук во «внутреннюю ошибку» без единой проверки
+    with open(f, 'rb') as fh:
+        data = fh.read()
+    try:
+        data.decode('utf-8')
+    except UnicodeDecodeError as e:
+        err('гигиена файла: %s не в UTF-8 (байт 0x%02X в позиции %d) — модуль 1С сохраняется в UTF-8 с BOM. Пересохрани файл '
+            'в UTF-8; остальные проверки этой правки не выполнены.' % (f, data[e.start], e.start))
+        return 2
     # Блокируют только находки в строках, записанных правкой (с 17.10.2026): прежние ошибки старого модуля — подсказка.
     # Новый файл — весь свой; если строки правки определить нельзя (запись через EDT целиком) — как раньше, весь файл;
-    # правка только удаляла строки — своих строк нет, прежние находки — подсказка.
+    # правка ничего не записала (только удаляла строки) — своих строк нет; находки анализатора сверяются с текстом до правки.
     mine = written_lines(j, f)
 
     def ours(line):
         return mine is not NOTHING and (mine is None or not mine or line in mine)
 
+    # Все блокирующие находки правки — разом: ранний отказ прятал остальные, и узкая починка одной переводила их в «прежние»
+    block = False
     # Подавление вместо исправления (решение владельца 05.11.2026, по мотивам config-protection ECC — docs/sources/ecc-review.md):
     # не блокирует — подавление бывает законным, но решает его владелец; BSLLS:…-off к тому же ломает bsl-analyzer на кириллице
     sup = new_suppressions(j, f)
@@ -490,19 +680,25 @@ def main():
                        'можно только после «да» владельца (спроси окном вариантов, назови диагностику и почему она ложная); '
                        'BSLLS:…-off к тому же обрывает bsl-analyzer на кириллице — ложный зелёный (bug-diagnosis-loop Ф5)'
                        % (os.path.basename(f), '; '.join('строка %d: %s' % (n, d) for n, d in sup[:3])))
+    if weakened_test(j, f):
+        CONTEXT.append('тест YAXUnit %s ослаблен этой правкой (снято утверждение ЮТест.ОжидаетЧто или регистрация теста либо '
+                       'добавлен ЮТест.Пропустить): красный тест чинится правкой кода, тест правится только после «да» владельца '
+                       '(bug-diagnosis-loop Ф5). Перенос утверждения или согласованная правка теста — скажи об этом в ответе'
+                       % os.path.basename(f))
 
     dirty = hygiene(f, mine)
     if dirty:
         err('гигиена файла: %d нарушений в %s — %s. Исправь до продолжения: тире в коде — на минус «-», управляющие и '
             'невидимые символы убрать, переводы строк — как у файла, BOM — вернуть (по мотивам 1c-quality-gate).'
             % (len(dirty), f, '; '.join('строка %d: %s' % x for x in dirty[:5]) + (' и ещё %d' % (len(dirty) - 5) if len(dirty) > 5 else '')))
-        return 2
+        block = True
 
     exe = analyzer_path(root)
     if os.path.isfile(exe):
         errs = run_analyzer(exe, f)
         if errs is None:
-            degraded('validate-bsl: DEGRADED — bsl-analyzer не дал отчёта по %s, синтаксис НЕ проверен (сбой или таймаут анализатора)' % f)
+            degraded('validate-bsl: DEGRADED — bsl-analyzer не дал отчёта по %s, синтаксис НЕ проверен (сбой или таймаут анализатора)' % f,
+                     model=True)
         elif not errs:
             state_dir = os.environ.get('CC_GATE_STATE_DIR') or (os.path.join(root, 'logs') if root else tempfile.gettempdir())
             if not analyzer_alive(exe, state_dir, str(j.get('session_id') or '') or 'nosession'):
@@ -513,6 +709,16 @@ def main():
                                       'что bsl-analyzer молчит (версия: bsl-analyzer --version)')
         new = [e for e in errs or [] if ours(error_line(e))]
         old = [e for e in errs or [] if e not in new]
+        # находка вне строк правки, которой до правки не было, — от правки: удаление «КонецЕсли;» ломает чужую строку
+        before = before_text(j, f) if old else None
+        more = grown(exe, f, before, errs, new, old) if before is not None else []
+        if more is None:
+            degraded('validate-bsl: DEGRADED — bsl-analyzer не дал отчёта по тексту %s до правки: прежние находки не сверены, '
+                     'находка от удаления могла уйти подсказкой' % os.path.basename(f), model=True)
+        elif more:
+            moved = {id(e) for e in more}
+            new += more
+            old = [e for e in old if id(e) not in moved]
         if old:
             CONTEXT.append('bsl-analyzer: в %s %d прежних ошибок и предупреждений вне строк этой правки (%s) — не блокирует, но '
                            'пропускать нельзя: свой код исправь отдельным шагом этой же задачи; объект поставщика на поддержке — '
@@ -520,12 +726,14 @@ def main():
                            % (os.path.basename(f), len(old), ', '.join(dict.fromkeys(str(e.get('ruleId')) for e in old))))
         if new:
             rules = ', '.join(dict.fromkeys('%s (%s)' % (e.get('ruleId'), e.get('level')) for e in new))
-            err('bsl-analyzer: %d error(s)/warning(s) in written lines of %s - rules: %s - fix the code before continuing, '
-                'warnings too (work-through-tools p.5)' % (len(new), f, rules))
-            return 2
+            err('bsl-analyzer: %d error(s)/warning(s) in written lines of %s%s - rules: %s - fix the code before continuing, '
+                'warnings too (work-through-tools p.5)'
+                % (len(new), f, ' (%d of them outside written lines, absent before the edit)' % len(more) if more else '', rules))
+            block = True
     else:
-        err('validate-bsl: bsl-analyzer.exe not found - contour 1 (bsl-analyzer) is DEAD, fail-open. '
-            'Install it: python tools/setup/install-tools.py --dest <plugin data folder> (see docs/tools/installed-tools-and-servers.md).')
+        degraded('validate-bsl: DEGRADED — bsl-analyzer.exe не найден, контур 1 (bsl-analyzer) мёртв, синтаксис %s НЕ проверен. '
+                 'Установи: python tools/setup/install-tools.py --dest <папка данных плагина> (docs/tools/installed-tools-and-servers.md)'
+                 % os.path.basename(f), model=True)
 
     mix = mixed_identifiers(f)
     mix_new = [name for line, name in mix if ours(line)]
@@ -534,7 +742,7 @@ def main():
     if mix_new:
         err('mixed-language identifiers (%d) in written lines of %s - language-profile violation, use ONE language per project profile. Samples: %s'
             % (len(mix_new), f, ', '.join(mix_new[:3])))
-        return 2
+        block = True
 
     found = comment_budget(j, f)
     if found:
@@ -542,15 +750,15 @@ def main():
             'без абзацев прозы в шапке и без пояснений в теле; «почему так» — в журнал работы (docs-project/changelog.md), '
             'не в код (docs/code/comment-budget.md). Директивы анализаторов и маркеры вставок в типовые не считаются.'
             % (len(found), f, '; '.join(found[:5]) + (' и ещё %d' % (len(found) - 5) if len(found) > 5 else '')))
-        return 2
-    return 0
+        block = True
+    return 2 if block else 0
 
 
 if __name__ == '__main__':
     try:
         code = main()
     except Exception as e:
-        degraded('validate-bsl: DEGRADED — внутренняя ошибка, правка пропущена без проверки: %s' % e)
+        degraded('validate-bsl: DEGRADED — внутренняя ошибка, правка пропущена без проверки: %s' % e, model=True)
         code = 0
     emit(code)
     sys.exit(code)

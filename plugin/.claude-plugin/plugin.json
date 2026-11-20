@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "ones-core",
-  "version": "5.6.2",
+  "version": "5.6.3",
   "description": "Рабочее окружение Claude Code для разработки на 1С: скиллы для метаданных, форм, запросов и отчётов, проверка кода, MCP-серверы с API платформы и стандартами, защита от опасных команд",
   "author": {
     "name": "Only1S"

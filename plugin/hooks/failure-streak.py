@@ -1,10 +1,12 @@
 """PostToolUseFailure: стоп при повторных сбоях инструментов — 3 подряд подсказка сменить подход, 5 — остановиться и спросить владельца.
 
 По мотивам circuit-breaker Citadel (MIT, пересказ; docs/sources/citadel-review.md). Сбои считаются по хвосту журнала
-сессии, своего файла состояния нет: подряд идущие ответы инструментов с is_error после последнего успешного ответа
-или последнего запроса владельца. Отказ барьера (PreToolUse, код 2) события PostToolUseFailure не порождает, но в
-журнале записан ответом с ошибкой — поэтому входит в серию, когда следом идёт настоящий сбой (зонд 05.11.2026).
-Прерывание владельцем (is_interrupt) не считается. Хук ничего не блокирует; его собственный сбой — тихий выход 0.
+сессии: подряд идущие ответы инструментов с is_error после последнего успешного ответа или последнего запроса владельца.
+Отказ барьера (PreToolUse, код 2) события PostToolUseFailure не порождает, но в журнале записан ответом с ошибкой —
+поэтому входит в серию, когда следом идёт настоящий сбой (зонд 05.11.2026).
+Прерывание владельцем (is_interrupt) не считается. Хук ничего не блокирует. Его собственный сбой (с 20.11.2026, контракт
+деградации) — выход 0 с пометкой DEGRADED в systemMessage и строкой kind='DEGRADED' в logs/answer-check.jsonl; журнала
+сессии нет — считать нечего, тихий выход 0.
 Вывод — байты UTF-8: печать кириллицы через print на Windows приходила модели битой (зонд 05.11.2026).
 С 05.11.2026 (решение владельца, по мотивам agent-usage-guard, MIT): сколько последних сбоев — один и тот же вызов
 (подпись: инструмент и вход без description/timeout/run_in_background), пишется в logs/failure-streak.json проекта;
@@ -24,6 +26,7 @@ SHOW = 3
 STATE = os.path.join('logs', 'failure-streak.json')
 SESSIONS_MAX = 32
 SKIP_KEYS = {'description', 'timeout', 'run_in_background'}
+REPLACE_TRIES = 20         # подмена файла счёта: до ~1 с, пока repeat-guard держит его открытым
 
 
 def signature(tool, ti):
@@ -85,7 +88,37 @@ def save_state(path, sid, entry):
     tmp = '%s.%d.tmp' % (path, os.getpid())
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(keep, f)
-    os.replace(tmp, path)
+    # на Windows файл, открытый другим процессом (repeat-guard читает его на PreToolUse), подменить нельзя, пока его не закроют
+    try:
+        for k in range(REPLACE_TRIES):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if k + 1 == REPLACE_TRIES:
+                    raise
+                time.sleep(0.05)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def degraded(e, sid=''):
+    """Контракт деградации проверки после факта: сбой называется строкой kind='DEGRADED' в logs/answer-check.jsonl и текстом
+    для systemMessage, а не молчанием, неотличимым от «сбоев нет»."""
+    root = os.environ.get('CLAUDE_PROJECT_DIR')
+    if root:
+        try:
+            os.makedirs(os.path.join(root, 'logs'), exist_ok=True)
+            with open(os.path.join(root, 'logs', 'answer-check.jsonl'), 'a', encoding='utf-8', newline='\n') as f:
+                f.write(json.dumps({'ts': int(time.time()), 'sid': sid or 'nosession', 'kind': 'DEGRADED', 'hook': 'failure-streak',
+                                    'sample': str(e)[:200]}, ensure_ascii=False) + '\n')
+        except OSError:
+            pass
+    return 'failure-streak: DEGRADED — внутренняя ошибка, серия сбоев не посчитана: %s' % e
 
 
 def text_of(content):
@@ -166,31 +199,34 @@ def message(run):
 
 
 def main():
-    try:
-        data = json.loads(sys.stdin.buffer.read().decode('utf-8'))
-        if data.get('is_interrupt'):
-            return
-        records = tail_records(data.get('transcript_path'))
-        run = streak(records)
-        current = str(data.get('tool_use_id') or '')
-        if not current or current not in {tid for tid, _ in run}:
-            run.append((current, text_of(data.get('error'))))
-        sid = str(data.get('session_id') or '')
-        if sid:
-            sig = signature(data.get('tool_name'), data.get('tool_input'))
-            try:
-                save_state(state_path(data), sid, {'sig': sig, 'count': same_tail(run, records, sig, current),
-                                                   'tool': str(data.get('tool_name') or ''), 'ts': int(time.time())})
-            except OSError:
-                pass
-        text = message(run)
-        if text:
-            out = {'hookSpecificOutput': {'hookEventName': 'PostToolUseFailure', 'additionalContext': text}}
-            sys.stdout.buffer.write((json.dumps(out, ensure_ascii=False) + '\n').encode('utf-8'))
-    except Exception:
+    data = json.loads(sys.stdin.buffer.read().decode('utf-8'))
+    if data.get('is_interrupt') or not os.path.isfile(str(data.get('transcript_path') or '')):
         return
+    records = tail_records(data.get('transcript_path'))
+    run = streak(records)
+    current = str(data.get('tool_use_id') or '')
+    if not current or current not in {tid for tid, _ in run}:
+        run.append((current, text_of(data.get('error'))))
+    out = {}
+    text = message(run)
+    if text:
+        out['hookSpecificOutput'] = {'hookEventName': 'PostToolUseFailure', 'additionalContext': text}
+    sid = str(data.get('session_id') or '')
+    if sid:
+        sig = signature(data.get('tool_name'), data.get('tool_input'))
+        try:
+            save_state(state_path(data), sid, {'sig': sig, 'count': same_tail(run, records, sig, current),
+                                               'tool': str(data.get('tool_name') or ''), 'ts': int(time.time())})
+        except OSError as e:   # подсказку о серии всё равно отдать: сбой записи гасит только барьер повтора
+            out['systemMessage'] = degraded(e, sid)
+    if out:
+        sys.stdout.buffer.write((json.dumps(out, ensure_ascii=False) + '\n').encode('utf-8'))
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        sys.stdout.buffer.write((json.dumps({'systemMessage': degraded(e)}, ensure_ascii=False) + '\n').encode('utf-8'))
+    sys.stdout.flush()
     sys.exit(0)

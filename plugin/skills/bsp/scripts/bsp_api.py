@@ -29,13 +29,16 @@ for _stream in (sys.stdout, sys.stderr):
 
 # Region names that mark an export method's stability tier.
 STABLE_REGION = "ПрограммныйИнтерфейс"
-SERV_REG = ("СлужебныйПрограммныйИнтерфейс", "СлужебныеПроцедурыИФункции")
+SERV_REG = ("СлужебныйПрограммныйИнтерфейс", "СлужебныеПроцедурыИФункции", "Internal", "Private")
 DEPRECATED_REGION = "УстаревшиеПроцедурыИФункции"
+# dev_core bsp-english-variant: области английского варианта языка отслеживаются наравне с русскими.
+STABLE_REGIONS = (STABLE_REGION, "Public")
+DEPRECATED_REGIONS = (DEPRECATED_REGION, "ObsoleteProceduresAndFunctions")
 # Real override-flavored regions in BSP 3.1.11 (the plan's "#Область
 # Переопределение" does not exist). Most override hooks live in *Переопределяемый
 # modules under ПрограммныйИнтерфейс — detected by module name, see below.
-OVERRIDE_REGIONS = ("ПереопределениеВызовов", "ПереопределениеТекстаЗапросаНабораДанных")
-OVERRIDE_MODULE_SUFFIX = "Переопределяемый"
+OVERRIDE_REGIONS = ("ПереопределениеВызовов", "ПереопределениеТекстаЗапросаНабораДанных", "OverridingCalls")
+OVERRIDE_MODULE_SUFFIX = ("Переопределяемый", "Overridable")  # dev_core bsp-english-variant
 
 DOC_MAX_LINES = 15  # truncate doc-comment to this many lines if no // Пример:
 
@@ -115,7 +118,7 @@ def _region_for_stack_name(name):
     Only the meaningful regions are tracked by name; any other region is a
     plain grouping whose methods inherit the parent region (handled by caller
     pushing stack[-1] for unknown names)."""
-    if name in (STABLE_REGION, *SERV_REG, DEPRECATED_REGION, *OVERRIDE_REGIONS):
+    if name in (*STABLE_REGIONS, *SERV_REG, *DEPRECATED_REGIONS, *OVERRIDE_REGIONS):
         return name
     return None
 
@@ -125,6 +128,33 @@ def _is_override_module(mod_name):
     code реализует) under #Область ПрограммныйИнтерфейс — detected by suffix,
     since the plan's #Область Переопределение does not exist in BSP 3.1.11."""
     return mod_name.endswith(OVERRIDE_MODULE_SUFFIX)
+
+
+# dev_core bsp-english-variant: разбор ниже написан под русские ключевые слова в штатном регистре, а BSL принимает
+# оба варианта языка и регистр не различает. Первое слово строки (с приставкой Асинх/Async) и Экспорт/Export
+# сводятся к этой записи; сигнатура и doc-комментарий выводятся из строк модуля как есть.
+_CANON = {
+    "асинх": "Асинх", "async": "Асинх", "функция": "Функция", "function": "Функция",
+    "процедура": "Процедура", "procedure": "Процедура", "конецфункции": "КонецФункции", "endfunction": "КонецФункции",
+    "конецпроцедуры": "КонецПроцедуры", "endprocedure": "КонецПроцедуры",
+    "#область": "#Область", "#region": "#Область", "#конецобласти": "#КонецОбласти", "#endregion": "#КонецОбласти",
+}
+_CANON_FIRST = frozenset(k[0] for k in _CANON)
+_CANON_HEAD = re.compile(r"^(\s*)(?:(Асинх|Async)(\s+))?(#?\w+)", re.I)
+_CANON_EXPORT = re.compile(r"(?<![\w])(?:Экспорт|Export)(?![\w])", re.I)
+
+
+def _canon_line(line):
+    """dev_core bsp-english-variant: строка, в которой ключевые слова разбора записаны по-русски в штатном регистре."""
+    low = line.lower()   # отсев по low: поиск без учёта регистра по каждой строке модуля втрое медленнее
+    if "xport" in low or "кспорт" in low:
+        line = _CANON_EXPORT.sub("Экспорт", line)
+    if low.lstrip()[:1] in _CANON_FIRST:
+        m = _CANON_HEAD.match(line)
+        if m and m.group(4).lower() in _CANON:
+            prefix = _CANON[m.group(2).lower()] + m.group(3) if m.group(2) else ""
+            line = m.group(1) + prefix + _CANON[m.group(4).lower()] + line[m.end():]
+    return line
 
 
 def parse_export_methods(bsl_path):
@@ -142,7 +172,8 @@ def parse_export_methods(bsl_path):
          block of `//` lines directly above the declaration.
     """
     text = bsl_path.read_text(encoding="utf-8-sig")
-    lines = text.splitlines()
+    raw = text.splitlines()
+    lines = [_canon_line(s) for s in raw]  # dev_core bsp-english-variant: разбор — по канонической записи
     n = len(lines)
 
     # Pass 1: region name per line.
@@ -221,7 +252,10 @@ def parse_export_methods(bsl_path):
                     break
                 j = j2
         if is_export:
-            doc_lines = _collect_doc(lines, i)
+            doc_lines = _collect_doc(raw, i)
+            # dev_core bsp-english-variant: сигнатура — из строк модуля как есть; её куски — строки i, i+1, … подряд
+            # и последним строка j с «Экспорт» (пустые строки перед ним разбор пропускает)
+            sig_text = "\n".join([raw[k].strip() for k in range(i, i + sig_text.count("\n"))] + [raw[j].strip()])
             end_idx = j
             end_pattern = re.compile(rf"^{end_keyword}\s*;?\s*(?://.*)?$")
             for body_idx in range(j + 1, n):
@@ -262,7 +296,7 @@ def _collect_doc(lines, decl_idx):
     # Truncate before the // Пример: section, or to DOC_MAX_LINES lines.
     out = []
     for line in doc:
-        if line.strip().startswith("// Пример:"):
+        if line.strip().startswith(("// Пример:", "// Example:")):  # dev_core bsp-english-variant
             break
         out.append(line)
         if len(out) >= DOC_MAX_LINES:
@@ -280,8 +314,8 @@ def _stability_warning(mod_name, region):
                 "БСП вызывает этот метод, прикладной код РЕАЛИЗУЕТ его "
                 "(копирует модуль-переопределитель в конфигурацию и\n"
                 "переопределяет тело). НЕ вызывается из прикладного кода напрямую.")
-    if region == DEPRECATED_REGION:
-        return "⚠️ Region: УстаревшиеПроцедурыИФункции (deprecated) — не использовать в новом коде."
+    if region in DEPRECATED_REGIONS:  # dev_core bsp-english-variant
+        return f"⚠️ Region: {region} (deprecated) — не использовать в новом коде."
     if region in SERV_REG:
         return "⚠️ Region: служебный — обратная совместимость не гарантируется."
     return None
@@ -345,7 +379,7 @@ def cmd_method(args):
         sys.exit(3)  # dev_core checkup-1029: «не найден» отличим по коду от успешного поиска
 
     # Prefer stable (ПрограммныйИнтерфейс) definitions; fall back to any.
-    stable = [m for m in matches if m["region"] == STABLE_REGION]
+    stable = [m for m in matches if m["region"] in STABLE_REGIONS]  # dev_core bsp-english-variant
     candidates = stable if stable else matches
 
     def _norm_sig(s):
@@ -414,7 +448,7 @@ def cmd_modules(args):
     stable = []
     for mod_name, bsl_path in list_common_modules(src):
         methods = parse_export_methods(bsl_path)
-        if any(region == STABLE_REGION
+        if any(region in STABLE_REGIONS  # dev_core bsp-english-variant
                for _name, region, _sig, _doc, _start, _end in methods):
             stable.append(mod_name)
     if stable:

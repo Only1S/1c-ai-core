@@ -61,6 +61,9 @@ an explicit BSP name or version; route it to `update.md` after the version check
    Show overridable-module hooks as implementations: BSP calls them;
    application code implements them, not a direct qualified module call.
    Exact Russian region and suffix names are documented in `fundamentals.md`.
+   The English language variant uses the regions `Public`, `Internal`,
+   `Private`, `ObsoleteProceduresAndFunctions`, `OverridingCalls` and the
+   `Overridable` suffix (ones-core patch).
 5. If a configuration XML export containing `CommonModules/` is available,
    additionally verify each recommended signature/region with `bsp_api.py`.
    Otherwise use the supplied reference and do not claim source verification.
@@ -141,6 +144,13 @@ export discovery; missing paths or `CommonModules/` yield a nonzero exit code
 (1), a method or module that is not found yields exit code 3 (правка ядра).
 `module` includes all regions; `modules` lists stable API modules only. The
 output marks hooks, internal and deprecated methods; retain these warnings.
+
+English language variant (ones-core patch): the references give the meaning
+and the scenario under Russian names, and so do their `bsp_api.py method`
+and `module` examples. Take the real module and method names from
+`bsp_api.py modules`, `bsp_api.py module <EnglishModule>`, the doc comment
+or code-index. Do not state that a method is absent until you have listed
+the English module.
 
 A text search of subsystem XML can locate a common-module reference, but
 assigning Catalog/Document objects to a subsystem requires parsing its

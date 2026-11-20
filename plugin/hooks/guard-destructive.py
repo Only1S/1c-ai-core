@@ -16,7 +16,8 @@
     (env, printenv, Get-ChildItem Env:, echo $…TOKEN); у grep/rg/sed/awk/findstr/Select-String первый позиционный аргумент —
     шаблон или программа, а не файл;
   - запись из оболочки в файлы доверия барьеров (OWNER_FILES): журнал сессии, logs/consent.json, .v8-project.json, настройки
-    Claude Code, .mcp.json, настройки ssh-mcp, хуки git, .git/config — перенаправлением, tee, cp/mv/rm, sed -i, Set-Content, кодом
+    Claude Code, .mcp.json, настройки ssh-mcp, хуки git, .git/config, с 20.11.2026 .bsl-language-server.json — перенаправлением,
+    tee, cp/mv/rm, sed -i, Set-Content, кодом
     (write_text, open(…,'w'), writeFileSync, [IO.File]::Write*: цель записи — литерал или переменная с литералом, имя в тексте,
     который код пишет в другой файл, не запись); чтение и копия ИЗ них проходят; claude mcp add; reload-config с action=reload;
     слой экрана из оболочки (SendKeys, CopyFromScreen, mouse_event, pyautogui, nircmd);
@@ -39,7 +40,8 @@
   - прямой запуск скриптов необратимых скиллов (meta-remove, support-edit, remove-form, remove-template, db-load-dt);
   - адреса со схемой file:/data:/javascript: и эндпоинты метаданных облака (до запроса);
   - запись в файлы, которым верят барьеры: реестр .v8-project.json, файл состояния тулкита, установленный плагин; обращение к
-    серверу 1c-toolkit мимо MCP (порт тулкита, /mcp) и чтение таблиц данных клиентом СУБД (замер 30.10.2026), кроме базы
+    серверу 1c-toolkit мимо MCP (порт тулкита, /mcp; с 20.11.2026 и в теле heredoc, поданном интерпретатору) и чтение таблиц
+    данных клиентом СУБД (замер 30.10.2026), кроме базы
     реестра с pd: none, названной в команде сервером и именем;
   - дисциплина команд (с 17.10.2026): пакетный запуск 1cv8 не через Start-Process -Wait (в том числе кодом python -c/node -e,
     [Diagnostics.Process]::Start, созданием Win32_Process), остановка и ожидание процессов 1С по имени (Stop-Process/taskkill
@@ -405,6 +407,10 @@ OWNER_FILES = (
      'его пишет только /ones-core:toolkit (personal-data-masked-from-1c)'),
     (r'(?:^|/)\.claude/plugins/(?:cache|marketplaces)/|(?:^|/)\$\{?claude_plugin_root\}?(?:/|$)',
      'запись в установленный плагин — в нём хуки, правка сняла бы защиту сразу; плагин меняется только обновлением: claude plugin update'),
+    # с 20.11.2026: из оболочки не создаётся, не правится и не удаляется; новый файл — только через Write, его судит guard-skills
+    (r'(?:^|/)\.bsl-language-server\.json$',
+     'bug-diagnosis-loop Ф5: настройки BSL Language Server из оболочки не создаются, не правятся и не удаляются — отключённая '
+     'диагностика прячет замечание, а не исправляет код; ложную диагностику объявляет владелец'),
 )
 # Запись кодом интерпретатора и .NET: первым делом — куда. Упоминание файла в тексте, который код пишет в другой файл, не запись
 # (журнал работы с `.v8-project.json` в тексте — обычная правка). Аргумент: литерал или переменная с литералом в этом же коде.
@@ -688,7 +694,8 @@ def owner_mask_reason(mask):
     head, _, base = mask.replace('\\', '/').lower().rpartition('/')
     if not re.search(r'[*?\[]', base) or not re.match(r'[\w.-]{2,}', base):
         return None
-    for name in ('consent.json', '.v8-project.json', 'settings.json', 'settings.local.json', '.mcp.json', 'config.toml'):
+    for name in ('consent.json', '.v8-project.json', 'settings.json', 'settings.local.json', '.mcp.json', 'config.toml',
+                 '.bsl-language-server.json'):
         if fnmatch.fnmatchcase(name, base) and owner_reason((head + '/' if head else '') + name):
             return owner_reason((head + '/' if head else '') + name)
     return None
@@ -812,11 +819,13 @@ TOOLKIT_URL = r'(?:127\.0\.0\.1|localhost|\[::1\]):(\d+)/mcp\b'
 NET_CLIENT = r'\b(curl|wget|Invoke-WebRequest|iwr|Invoke-RestMethod|irm)\b'
 
 
-def toolkit_bypass(cmd, project_dir):
-    """Порт тулкита, к которому команда идёт сетевым клиентом или кодом, или None. Скрипт в файле не разбирается."""
+def toolkit_bypass(cmd, project_dir, fed=()):
+    """Порт тулкита, к которому команда идёт сетевым клиентом, кодом (-c/-e) или телом heredoc, поданным интерпретатору
+    (python - <<E, node <<E; с 20.11.2026), или None. Скрипт в файле не читается, адрес, собранный из частей, не виден."""
     found = set(re.findall(TOOLKIT_URL, cmd, I))
     bare = [strip_literals(unquote_atoms(re.sub(r'\s+', ' ', x).strip())) for x in split_outside_quotes(cmd)]
-    if not found or not any(m(NET_CLIENT, x) or m(CODE_CARRIER, x) for x in bare):
+    if not found or not (any(m(NET_CLIENT, x) or m(CODE_CARRIER, x) for x in bare) or
+                         any(k == 'code' and re.search(TOOLKIT_URL, b, I) for k, _, b, _ in fed)):
         return None
     ports = {os.environ.get('ONEC_TOOLKIT_PORT') or '6003'}
     try:
@@ -1669,7 +1678,7 @@ def main():
 
     segs_norm = [re.sub(r'\s+', ' ', x).strip() for x in raw_segments]
 
-    port = toolkit_bypass(cmd, project_dir)
+    port = toolkit_bypass(cmd, project_dir, fed)
     if port:
         emit_deny('Заблокировано до-исполнительным барьером (guard-destructive): обращение к серверу 1c-toolkit (порт %s) мимо MCP — '
                   'так данные базы идут к модели без барьера ПДн (personal-data-masked-from-1c п.6). Данные базы — инструментами '

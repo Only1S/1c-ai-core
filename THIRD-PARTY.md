@@ -1,8 +1,8 @@
 # Сторонние компоненты и лицензии
 
-**Коротко.** Наш код и тексты — под лицензией PolyForm Noncommercial 1.0.0 ([LICENSE](LICENSE)); версии до core-v5.6.0 включительно — под MIT. Программ инструментов в репозитории нет: установщик скачивает их из официальных релизов авторов и сверяет контрольные суммы, у каждой программы — своя лицензия. Одна программа закрытая и наша — движок обфускации `obfuscator.zip`. Часть скиллов и приёмов в правилах взята у других авторов — они перечислены ниже с лицензиями.
+**Коротко.** Наш код и тексты — под лицензией PolyForm Noncommercial 1.0.0 ([LICENSE](LICENSE)); версии до core-v5.6.0 включительно — под MIT. Программ инструментов в репозитории нет, кроме модуля разбора техжурнала `OneSTools.PS.TechLog` (MIT, строка в таблице ниже; SHA-256 — в его `ORIGIN.md`). Остальные установщик скачивает из официальных источников авторов и сверяет контрольные суммы, у каждой программы — своя лицензия. Одна программа закрытая и наша — движок обфускации `obfuscator.zip`. Часть скиллов и приёмов в правилах взята у других авторов — они перечислены ниже с лицензиями.
 
-Канал ядра — два репозитория: закрытый `Only1S/1c-ai-core` для своих проектов и открытый `Only1S/1c-ai-core`. Чем открытый отличается от закрытого — в последнем разделе.
+Канал ядра — два репозитория: закрытый `Only1S/ones-core` для своих проектов и открытый `Only1S/1c-ai-core`. Чем открытый отличается от закрытого — в последнем разделе.
 
 ## Что наше (PolyForm Noncommercial 1.0.0)
 
@@ -10,21 +10,22 @@
 
 ## Программы, которые ставит установщик
 
-В репозитории их нет. Установщик (`plugin/tools/setup/install-tools.py`) скачивает файл релиза с GitHub автора, сверяет SHA-256 из `plugin/tools/setup/tools-manifest.json` и кладёт его в папку данных плагина.
+В репозитории их нет. Установщик (`plugin/tools/setup/install-tools.py`) скачивает файл по адресу из `plugin/tools/setup/tools-manifest.json`: обычно это релиз на GitHub автора, у `1c-formsserver` — архив коммита, у `vanessa-runner` — пакет с hub.oscript.io. Он сверяет SHA-256 из манифеста и кладёт файл в папку данных плагина.
 
 | Файл и версия | Для чего | Источник | Лицензия |
 |---|---|---|---|
-| bsl-indexer-windows-x64.zip 1.15.6 | индексатор кода 1С — поиск по коду, вызовы и связи (MCP-сервер code-index) | [Regsorm/code-index-mcp](https://github.com/Regsorm/code-index-mcp) | **MIT** |
-| bsl-context-windows-x64.zip 0.23.1 | справка по встроенному языку и платформе 1С (MCP-сервер bsl-context) | [Regsorm/bsl-context](https://github.com/Regsorm/bsl-context) | **MIT (с атрибуцией двух авторов)** |
-| bsl-analyzer-windows-amd64.exe 0.4.0 | анализатор кода 1С — автоматическая проверка после каждой правки модуля .bsl | [itrous/bsl-analyzer](https://github.com/itrous/bsl-analyzer) | **LGPL-3.0-or-later (поставляемая сборка)** |
+| bsl-indexer-windows-x64.zip 1.17.1 | индексатор кода 1С — поиск по коду, вызовы и связи (MCP-сервер code-index) | [Regsorm/code-index-mcp](https://github.com/Regsorm/code-index-mcp) | **MIT** |
+| bsl-context-windows-x64.zip 0.24.1 | справка по встроенному языку и платформе 1С (MCP-сервер bsl-context) | [Regsorm/bsl-context](https://github.com/Regsorm/bsl-context) | **MIT (с атрибуцией двух авторов)** |
+| bsl-analyzer-windows-amd64.exe 0.4.6 | анализатор кода 1С — автоматическая проверка после каждой правки модуля .bsl | [itrous/bsl-analyzer](https://github.com/itrous/bsl-analyzer) | **LGPL-3.0-or-later (поставляемая сборка)** |
 | mcp-bsl-context-0.3.2.jar 0.3.2 | синтаксис и объектная модель платформы 1С (MCP-сервер bsl-platform; нужна Java 17 или новее) | [alkoleft/mcp-bsl-platform-context](https://github.com/alkoleft/mcp-bsl-platform-context) | **MIT** |
-| MCP_Toolkit.epf 1.9.0 | обработка для базы 1С: через неё сервер 1c-toolkit выполняет запросы и код в тестовой базе (открывается в базе вручную) | [ROCTUP/1c-mcp-toolkit](https://github.com/ROCTUP/1c-mcp-toolkit) | **GPL-3.0** |
+| 1c-formsserver, архив коммита cd3f56e | сервер `1c-forms` — проверка и сборка управляемых форм | [Desko77/1c-formsserver](https://github.com/Desko77/1c-formsserver) | **MIT** |
+| MCP_Toolkit.epf 1.10.0 | обработка для базы 1С: через неё сервер 1c-toolkit выполняет запросы и код в тестовой базе (открывается в базе вручную) | [ROCTUP/1c-mcp-toolkit](https://github.com/ROCTUP/1c-mcp-toolkit) | **GPL-3.0** |
 | 1c-metadata-json-exporter.epf 2.0.0 | обработка для базы 1С: выгружает структуру метаданных в JSON | [Romandredan/1c-metadata-json-exporter](https://github.com/Romandredan/1c-metadata-json-exporter) | **MIT** |
 | YAxUnit-25.12.cfe 25.12 | движок юнит-тестов 1С YAXUnit (расширение .cfe): команда /ones-core:tests ставит его в тестовую базу | [bia-technologies/yaxunit](https://github.com/bia-technologies/yaxunit) | **Apache-2.0** |
 | OneScript-2.2.0-win-x64.zip 2.2.0 | исполнитель скриптов OneScript для vanessa-runner (необязательная запись, `--only onescript …`) | [EvilBeaver/OneScript](https://github.com/EvilBeaver/OneScript) | **MPL-2.0** |
 | vanessa-runner-3.0.2.ospx 3.0.2 | запуск сценариев Vanessa Automation без интерфейса (пакет opm; зависимости — из hub.oscript.io) | [vanessa-opensource/vanessa-runner](https://github.com/vanessa-opensource/vanessa-runner) | **MPL-2.0** |
 | add-6.9.5.ospx 6.9.5 | Vanessa Automation Driven Development, `bddRunner.epf` (пакет opm) | [vanessa-opensource/add](https://github.com/vanessa-opensource/add) | **MPL-2.0** |
-| vanessa-automation-single.1.2.043.45.zip 1.2.043.45 | движок сценариев Vanessa Automation (`vanessa-automation-single.epf`), харнесс передаёт его vrunner | [Pr-Mex/vanessa-automation](https://github.com/Pr-Mex/vanessa-automation) | **BSD-3-Clause** |
+| vanessa-automation-single.1.2.043.47.zip 1.2.043.47 | движок сценариев Vanessa Automation (`vanessa-automation-single.epf`), харнесс передаёт его vrunner | [Pr-Mex/vanessa-automation](https://github.com/Pr-Mex/vanessa-automation) | **BSD-3-Clause** |
 | obfuscator.zip, версия выпуска ядра | закрытый движок обфускации кода 1С для `/ones-core:protect` (необязательная запись, `--only obfuscator`) | страница Release этого канала, ассет выпуска; сумма сверяется по `sha256.txt` внутри архива | **закрытая лицензия Only1S**, не MIT |
 
 Программы под GPL и LGPL не распространяются вместе с плагином — именно поэтому их ставит установщик, а не репозиторий.
@@ -42,7 +43,6 @@
 | defuddle | скилл `page-fetch` — текст веб-страницы | [kepano/defuddle](https://github.com/kepano/defuddle) | **MIT** |
 | v8unpack | скиллы `cf-unpack`, `form-bin-module` — разбор файлов 1С без платформы | [saby-integration/v8unpack](https://github.com/saby-integration/v8unpack) | **MIT** |
 | EDT-MCP | необязательный сервер `edt-mcp` — работа с проектом в 1C:EDT | [DitriXNew/EDT-MCP](https://github.com/DitriXNew/EDT-MCP) | **AGPL-3.0** |
-| 1c-formsserver | сервер `1c-forms` — проверка и сборка управляемых форм, ставит установщик | [Desko77/1c-formsserver](https://github.com/Desko77/1c-formsserver) | **MIT** |
 | платформа 1С, Java 17+, Python 3.8+, Git | системные программы | ставит пользователь | — |
 
 ## Сторонний контент внутри плагина
@@ -58,11 +58,11 @@
 | модуль PowerShell `OneSTools.PS.TechLog` 1.1.11 в папке `tools` плагина — разбор технологического журнала 1С (`Get-TechLog`, `Sort-TechLog`, `Group-TechLog`) | [akpaevj/OneSTools.PS.TechLog](https://github.com/akpaevj/OneSTools.PS.TechLog), пакет PowerShell Gallery | **MIT** (© Akpaev E.A.) | код не изменялся; `LICENSE` — в папке модуля; наш только `Import-TechLog.ps1` (самолокующийся импорт) |
 | скилл `uuid-validate` — `scripts/check_uuid_duplicates.py` | [Desko77/claude-code-skills-1c](https://github.com/Desko77/claude-code-skills-1c) | **MIT** (© 2026 Desko77) | скрипт как есть; `SKILL.md` — наш |
 | скиллы `query-compose`, `query-optimize` — материал в `references/` | Desko77/claude-code-skills-1c | **MIT** (© 2026 Desko77) | `SKILL.md` — наши; источник указан в шапке каждого файла |
-| скилл `1c-platform-kb` — база знаний по платформе 1С и окружению (149 статей) | база знаний администратора владельца: конспекты документации ИТС 8.3.27 и методичек ИТС своими словами, статьи по PostgreSQL, MS SQL, Linux, Windows, Apache, IIS, Kafka, RabbitMQ | **конспекты ИТС — пересказ платного материала по подписке владельца** | ⛔ убрать перед открытием репозитория; в закрытом канале и проектах владельца — можно; дословных текстов ИТС нет; снимок — `tools/indexes/sync-platform-kb.py`; с 13.11.2026 входит и в открытый репозиторий — решение владельца (ADR-0014) |
+| скилл `1c-platform-kb` — база знаний по платформе 1С и окружению (149 статей) | база знаний администратора владельца: конспекты документации ИТС 8.3.27 и методичек ИТС своими словами, статьи по PostgreSQL, MS SQL, Linux, Windows, Apache, IIS, Kafka, RabbitMQ | **конспекты ИТС — пересказ платного материала по подписке владельца** | входит в открытый репозиторий — решение владельца 13.11.2026 (ADR-0014); дословных текстов ИТС нет — общие цепочки из 8 слов с исходными текстами ищет `tools/checks/verbatim-overlap.py` в `pre-publish-audit` (каталог источников — переменная `ONEC_ITS_RAW`); снимок — `tools/indexes/sync-platform-kb.py` |
 | скилл `form-ordinary` — обычные формы: `form.frm` ⇄ JSON, правка, проверка, отрисовка, `Form.bin` | [dreamadv81/form-ordinary](https://github.com/dreamadv81/form-ordinary), коммит `3c51f01` | **MIT** | `LICENSE` — в папке скилла; **картинки платформы (`frm_codec/data/platform_pictures/`, права фирмы «1С») не включены** — оставлен только `index.json` с их именами и кодами, отрисовка рисует серые квадраты; свои картинки — переменной `FRM_PLATFORM_PICTURES` |
-| скилл `cf-vendor-update` — обновление доработанной типовой на новый релиз | **наш** | MIT | по идее `alonehobo/1c-cf-vendor-merge` (лицензии нет): код не брался, грабли в `docs/platform/vendor-release-update.md` — пересказ |
+| скилл `cf-vendor-update` — обновление доработанной типовой на новый релиз | **наш** | **PolyForm Noncommercial 1.0.0** (до core-v5.6.0 включительно — MIT) | по идее `alonehobo/1c-cf-vendor-merge` (лицензии нет): код не брался, грабли в `docs/platform/vendor-release-update.md` — пересказ |
 | скилл `form-bin-module` — `scripts/form_bin_module.py` | [Caponid/1c-form-tools](https://github.com/Caponid/1c-form-tools) | **MIT** (© 2025 Caponid) | перенос с изменениями; текст лицензии — в шапке скрипта |
-| скиллы `page-fetch`, `cf-unpack`, `cfe-update-impact` | **наши** | MIT | `cfe-update-impact` — по идее xnd1124/CfeUpdater (лицензии нет): код и тесты не брались |
+| скиллы `page-fetch`, `cf-unpack`, `cfe-update-impact` | **наши** | **PolyForm Noncommercial 1.0.0** (до core-v5.6.0 включительно — MIT) | `cfe-update-impact` — по идее xnd1124/CfeUpdater (лицензии нет): код и тесты не брались |
 | `plugin/docs/platform/designer-batch-runs.md` — «вердикт по нескольким сигналам» | Desko77/claude-code-skills-1c | **MIT** | пересказ своими словами |
 | `plugin/docs/code/code-situation-standards-map.md` — карта «ситуация → стандарты» | [axelboman277/v8std-standards-harness](https://github.com/axelboman277/v8std-standards-harness) | **MIT** (© 2026 axelboman277) | перестроено, номера сверены через v8std |
 | `plugin/docs/code/naming-and-module-design.md` — лестница выбора точки врезки | [blessed2k/1c-ai-skills](https://github.com/blessed2k/1c-ai-skills) | **MIT** | пересказ |

@@ -232,13 +232,20 @@ def cmd_key(cmd):
 def shell_armed(root, sid, since=0.0):
     """Файлы 1С, записанные командами оболочки этой сессии (shell-arm.py): {ключ команды: [пути]}.
 
-    since — начало хода (секунды эпохи): запись прошлого хода той же командой не взводит текущий."""
-    try:
-        with open(os.path.join(root, shell_arm().SHELL_STATE), encoding='utf-8-sig') as f:
-            st = json.load(f)
-        rows = (st.get(sid) or {}).get('armed') or [] if isinstance(st, dict) else []
-    except (OSError, ValueError, AttributeError):
-        return {}
+    since — начало хода (секунды эпохи): запись прошлого хода той же командой не взводит текущий.
+    None — файл состояния есть, но не прочитан и после повтора (битый или занят): это не «взвода нет»."""
+    for attempt in (0, 1):
+        try:
+            with open(os.path.join(root, shell_arm().SHELL_STATE), encoding='utf-8-sig') as f:
+                st = json.load(f)
+            rows = (st.get(sid) or {}).get('armed') or [] if isinstance(st, dict) else []
+            break
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError, AttributeError):
+            if attempt:
+                return None
+            time.sleep(0.2)
     out = {}
     for r in rows:
         if isinstance(r, dict) and r.get('cmd') and isinstance(r.get('files'), list):
@@ -250,54 +257,130 @@ def shell_armed(root, sid, since=0.0):
 
 
 _CHANGE_PROFILE = []
+_CP_ERR = []   # почему классификатор не загружен: main выводит пометку DEGRADED
+
+
+def contour_sha(path):
+    """Отпечаток файла как в реестре contours.sha256: BOM снят, CRLF -> LF (как в gen-contour-registry)."""
+    with open(path, 'rb') as f:
+        txt = f.read().decode('utf-8-sig', 'replace').replace('\r\n', '\n')
+    return hashlib.sha256(txt.encode('utf-8')).hexdigest()
+
+
+def read_registry():
+    """Реестр отпечатков контуров рядом с этим файлом: {имя: sha256}; реестра нет — {}."""
+    reg = {}
+    p = os.path.join(HERE, 'contours.sha256')
+    if os.path.isfile(p):
+        with open(p, encoding='utf-8-sig') as f:
+            for line in f.read().splitlines():
+                t = line.strip('\ufeff')
+                if not t or t.startswith('#'):
+                    continue
+                parts = t.split('|')
+                if len(parts) >= 2:
+                    reg[parts[0]] = parts[1]
+    return reg
 
 
 def change_profile():
-    """Классификатор класса правки change-profile.py (в плагине — hooks/../tools/setup, в мастере — plugin/../tools/setup); None — нет."""
+    """Классификатор класса правки change-profile.py (в плагине — hooks/../tools/setup, в мастере — plugin/../tools/setup).
+    Грузится, только если отпечаток совпал с записью реестра contours.sha256; None — нет файла, отпечаток разошёлся или
+    загрузка упала (причина в _CP_ERR, C0 выключен — гейт строже)."""
     if not _CHANGE_PROFILE:
         mod = None
-        for p in (os.path.join(HERE, '..', 'tools', 'setup', 'change-profile.py'),
-                  os.path.join(HERE, '..', '..', 'tools', 'setup', 'change-profile.py')):
-            if os.path.isfile(p):
-                try:
+        found = [p for p in (os.path.join(HERE, '..', 'tools', 'setup', 'change-profile.py'),
+                             os.path.join(HERE, '..', '..', 'tools', 'setup', 'change-profile.py')) if os.path.isfile(p)]
+        if not found:
+            _CP_ERR.append('файл не найден')
+        else:
+            saved = list(sys.path)   # change-profile.py ставит tools/lib в sys.path[0]: после загрузки вернуть как было
+            try:
+                want = read_registry().get('change-profile.py')
+                if not want:
+                    _CP_ERR.append('нет записи в реестре contours.sha256')
+                elif contour_sha(found[0]) != want:
+                    _CP_ERR.append('отпечаток разошёлся с реестром contours.sha256')
+                else:
                     import importlib.util
-                    spec = importlib.util.spec_from_file_location('change_profile_for_gate', p)
+                    spec = importlib.util.spec_from_file_location('change_profile_for_gate', found[0])
                     mod = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(mod)
-                except Exception:
-                    mod = None
-                break
+            except Exception as e:
+                mod = None
+                _CP_ERR.append('ошибка загрузки: %s' % str(e)[:160])
+            finally:
+                sys.path[:] = saved
         _CHANGE_PROFILE.append(mod)
     return _CHANGE_PROFILE[0]
 
 
-def c0_module(path):
+_C0 = {}            # (путь, начало хода) -> C0 ли модуль: второй проход гейта и повтор для записи командой git не зовут
+_C0_NOREPO = set()  # папки, где git отказал (не репозиторий): C0 там невозможен, git повторно не запускается
+_C0_DEADLINE = []   # общий срок git-вызовов C0 за ход: таймаут всего Stop-хука 15 с
+C0_BUDGET_S = 4.0
+
+
+def c0_module(path, since=0.0, root=''):
     """Класс глубины C0 (с 10.11.2026, по мотивам 1c-quality-gate): модуль отличается от HEAD только комментариями и пустыми
-    строками — по change-profile.cosmetic, второго классификатора нет. Модуля нет в HEAD, нет git или классификатора — не C0."""
-    cp = change_profile()
-    if cp is None or not hasattr(cp, 'cosmetic') or not path or not os.path.isfile(path):
+    строками — по change-profile.cosmetic, второго классификатора нет. Не C0: модуля нет в HEAD, он закоммичен после начала
+    хода since (секунды эпохи), нет git или классификатора, модуль сверх SHELL_MAX_EACH за ход, общий срок git-вызовов истёк."""
+    if not path or not os.path.isfile(path):
         return False
+    key = (path, since)
+    if key in _C0:
+        return _C0[key]
     d, name = os.path.dirname(path), os.path.basename(path)
+    nd = norm(d)
+    if any(nd == x or nd.startswith(x + '/') for x in _C0_NOREPO) or len(_C0) >= SHELL_MAX_EACH:
+        return False
+    cp = change_profile()
+    if cp is None or not hasattr(cp, 'cosmetic'):
+        return False
+    if not _C0_DEADLINE:
+        _C0_DEADLINE.append(time.time() + C0_BUDGET_S)
+    if time.time() >= _C0_DEADLINE[0]:
+        return False
+
+    def git(*args):
+        left = _C0_DEADLINE[0] - time.time()
+        if left <= 0:   # срок общий на ход: вызов после него не запускается (итог — не C0, строже)
+            raise subprocess.TimeoutExpired(args, 0)
+        return subprocess.run(['git', '--no-optional-locks', '-C', d] + list(args), capture_output=True, timeout=max(0.2, left))
+    _C0[key] = False
     try:
-        if subprocess.run(['git', '--no-optional-locks', '-C', d, 'cat-file', '-e', 'HEAD:./' + name],
-                          capture_output=True, timeout=15).returncode != 0:
+        r = git('rev-parse', '--verify', '-q', 'HEAD:./' + name)   # 1 — модуля нет в HEAD, 128 — не репозиторий
+        if r.returncode != 0:
+            if r.returncode == 128:   # не репозиторий: и папка модуля, и корень проекта над ней (модули лежат по разным Ext)
+                _C0_NOREPO.add(nd)
+                if root and nd.startswith(norm(root).rstrip('/') + '/'):
+                    _C0_NOREPO.add(norm(root).rstrip('/'))
             return False
-        r = subprocess.run(['git', '--no-optional-locks', '-C', d, '-c', 'core.quotepath=off', 'diff', 'HEAD', '-U0', '--no-color',
-                            '--', './' + name], capture_output=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):
+        if since > 0:   # закоммиченное в этом ходе сравнивалось бы с собой: дифф пуст, а правка кода была
+            r = git('log', '-1', '--format=%ct', 'HEAD', '--', './' + name)
+            if r.returncode != 0 or int(r.stdout.decode('ascii', 'replace').strip() or 0) >= int(since):
+                return False
+        # -a --no-textconv --no-ext-diff: атрибуты -diff, binary, textconv и diff.external не прячут строки правки
+        r = git('-c', 'core.quotepath=off', 'diff', 'HEAD', '-U0', '--no-color', '-a', '--no-textconv', '--no-ext-diff',
+                '--', './' + name)
+    except (OSError, subprocess.SubprocessError, ValueError):
         return False
     if r.returncode != 0:
         return False
     lines = r.stdout.decode('utf-8', 'replace').splitlines()
-    return cp.cosmetic([x[1:] for x in lines if x.startswith('+') and not x.startswith('+++')],
-                       [x[1:] for x in lines if x.startswith('-') and not x.startswith('---')])
+    _C0[key] = cp.cosmetic([x[1:] for x in lines if x.startswith('+') and not x.startswith('+++')],
+                           [x[1:] for x in lines if x.startswith('-') and not x.startswith('---')])
+    return _C0[key]
 
 
-def gate_missing(calls, gs, root='', armed=None):
+def gate_missing(calls, gs, root='', armed=None, since=0.0, blind=False):
     """Чего не хватает ходу с правкой 1С; None — правок 1С в ходе не было.
 
-    armed — файлы 1С, записанные командами оболочки (shell-arm.py, по мотивам 1c-quality-gate): {cmd_key: [пути]}."""
+    armed — файлы 1С, записанные командами оболочки (shell-arm.py, по мотивам 1c-quality-gate): {cmd_key: [пути]};
+    since — начало хода (секунды эпохи): модуль, закоммиченный после него, не C0;
+    blind — состояние shell-arm не прочитано: что записали команды оболочки, не видно, после последней нужна пакетная проверка."""
     armed = armed or {}
+    last_shell = None   # индекс последней команды оболочки, кроме самой пакетной проверки
     modules, meta, gens, ran = {}, [], [], []
     bulk = []      # (индекс, число) — команды, записавшие больше SHELL_MAX_EACH модулей: им нужна пакетная проверка
     standards = False
@@ -349,10 +432,14 @@ def gate_missing(calls, gs, root='', armed=None):
             ran += [(i, v) for v in runs_skill_script(cmd, val_names)]
             if BATCH_CHECK.search(cmd):
                 ran.append((i, '*batch*'))
+            else:
+                last_shell = i
             for p in armed.get(cmd_key(cmd), []):
                 orig.setdefault(norm(p), str(p))
             wrote = [norm(p) for p in armed.get(cmd_key(cmd), [])]
-            shell_mods = [p for p in wrote if p.endswith('.bsl') and not c0_module(orig.get(p))]
+            bsl = [p for p in wrote if p.endswith('.bsl')]
+            # больше SHELL_MAX_EACH модулей — сразу пакетная проверка, C0 не считается (бюджет вызовов git за ход)
+            shell_mods = bsl if len(bsl) > SHELL_MAX_EACH else [p for p in bsl if not c0_module(orig.get(p), since, root)]
             meta += [p for p in wrote if not p.endswith('.bsl')]
             if len(shell_mods) > SHELL_MAX_EACH:
                 bulk.append((i, len(shell_mods)))
@@ -361,9 +448,10 @@ def gate_missing(calls, gs, root='', armed=None):
                     modules[p] = i
     # класс C0: модуль, где в сравнении с HEAD менялись только комментарии и пустые строки, — хватает проверок хука validate-bsl
     # (анализатор, гигиена); стандарты и validate_module не требуются (full-checker-set-before-done п.8а)
-    for m in [m for m in modules if m in orig and c0_module(orig[m])]:
+    for m in [m for m in modules if m in orig and c0_module(orig[m], since, root)]:
         del modules[m]
-    if not modules and not meta and not gens and not bulk:
+    blind_need = blind and last_shell is not None and not any(vi > last_shell and v == '*batch*' for vi, v in ran)
+    if not modules and not meta and not gens and not bulk and not blind_need:
         return None
     missing = []
     if not standards:
@@ -411,6 +499,10 @@ def gate_missing(calls, gs, root='', armed=None):
         if not any(vi > bi and v == '*batch*' for vi, v in ran):
             missing.append('пакетной проверки %d модулей, записанных командой оболочки, — bsl-analyzer analyze по их папке или сборка '
                            'с проверкой платформой (epf-build, /CheckConfig, /CheckModules) после этой команды' % n)
+    if blind_need:
+        missing.append('пакетной проверки после команд оболочки: состояние shell-arm не читается (logs/shell-arm.json битый или занят), '
+                       'записанные ими файлы 1С гейту не видны — bsl-analyzer analyze по папке исходников или сборка с проверкой '
+                       'платформой (epf-build, /CheckConfig, /CheckModules) после последней команды')
     summary = 'модулей %d, объектов метаданных %d, генераторов %d' % (len(modules) + sum(n for _, n in bulk), len(meta), len(gens))
     return list(dict.fromkeys(missing)), summary
 
@@ -449,15 +541,28 @@ def stop_gate(root, sid, data):
         return None
     gs = guard_skills()
     text = str(data.get('last_assistant_message') or '')
-    res = gate_missing(got[0], gs, root, shell_armed(root, sid, got[2]))
+    lost = []   # состояние shell-arm не прочитано в ходе с командой оболочки: записи командой не видны гейту
+
+    def armed_now(got):
+        armed = shell_armed(root, sid, got[2])
+        if armed is None and any(c[0] in ('Bash', 'PowerShell') for c in got[0]):
+            if not lost:
+                log_answer(root, sid, 'DEGRADED', 'stop-guard: состояние shell-arm не прочитано')
+            lost.append(1)
+        return armed or {}
+    armed = armed_now(got)
+    res = gate_missing(got[0], gs, root, armed, got[2], blind=bool(lost))
     if res and res[0]:
         time.sleep(1.0)   # журнал сессии пишется с задержкой: перед отказом — перечитать один раз
         got = turn_calls(path) or got
-        res = gate_missing(got[0], gs, root, shell_armed(root, sid, got[2]))
+        armed = armed_now(got)
+        res = gate_missing(got[0], gs, root, armed, got[2], blind=bool(lost))
     key = '%s:%s' % (sid, data.get('agent_id') or 'main')
     if not res or not res[0]:
         if res is not None:
             gate_state(root, key, got[1], refused=0)
+        if lost:
+            return 'degraded', 'гейт конца хода: DEGRADED — записи командой оболочки не проверены: состояние shell-arm не читается'
         return None
     missing, summary = res
     listed = '; '.join('%d) %s' % (k + 1, x) for k, x in enumerate(missing))
@@ -1022,14 +1127,18 @@ def main():
         gate = stop_gate(root, sid or 'nosession', data)
     except Exception as e:   # сломанный гейт не должен запирать ход, но и молчать не должен
         gate = ('degraded', 'гейт конца хода: DEGRADED — внутренняя ошибка, проверка правок 1С пропущена: %s' % e)
+    # классификатор C0 не загружен (подмена, сбой) — гейт строже, но это называется, а не молчит
+    cp_note = ('DEGRADED — C0 выключен: change-profile.py не загружен (%s)' % _CP_ERR[0]) if _CP_ERR else ''
+    if cp_note:
+        log_answer(root, sid or 'nosession', 'DEGRADED', 'stop-guard: ' + cp_note)
     if gate and gate[0] == 'block':
         sys.stdout.buffer.write(json.dumps({'decision': 'block', 'reason': gate[1]}, ensure_ascii=False).encode('utf-8'))
         sys.stdout.flush()
         return
     if data.get('hook_event_name') == 'SubagentStop':
         # конец работы помощника: гейт и наблюдение за его итогом — прочие напоминания относятся к ходу целиком
-        parts = ([gate[1]] if gate else []) + (['наблюдение за ответом (в блокирующем режиме помощник продолжил бы): '
-                                                + ' | '.join(observed)] if observed else [])
+        parts = ([gate[1]] if gate else []) + ([cp_note] if cp_note else [])
+        parts += (['наблюдение за ответом (в блокирующем режиме помощник продолжил бы): ' + ' | '.join(observed)] if observed else [])
         if parts:
             sys.stdout.buffer.write(json.dumps({'systemMessage': 'stop-guard: ' + ' | '.join(parts)}, ensure_ascii=False).encode('utf-8'))
             sys.stdout.flush()
@@ -1086,23 +1195,13 @@ def main():
     hooks_dir = HERE  # реестр и тела хуков — рядом с этим файлом (плагин и мастер ядра, ADR-0004)
     reg_path = os.path.join(hooks_dir, 'contours.sha256')
     if os.path.isfile(reg_path) and os.path.isdir(hooks_dir):
-        reg = {}
-        with open(reg_path, encoding='utf-8-sig') as f:
-            for line in f.read().splitlines():
-                t = line.strip('\ufeff')
-                if not t or t.startswith('#'):
-                    continue
-                parts = t.split('|')
-                if len(parts) >= 2:
-                    reg[parts[0]] = parts[1]
+        reg = read_registry()
         drift = []
         for name in sorted(os.listdir(hooks_dir)):
             p = os.path.join(hooks_dir, name)
             if name == 'contours.sha256' or not os.path.isfile(p) or name.startswith('__'):
                 continue
-            with open(p, 'rb') as f:
-                txt = f.read().decode('utf-8-sig', 'replace').replace('\r\n', '\n')  # BOM снимается, как в gen-contour-registry
-            h = hashlib.sha256(txt.encode('utf-8')).hexdigest()
+            h = contour_sha(p)
             if name not in reg:
                 drift.append('%s (нет в реестре)' % name)
             elif reg[name] != h:
@@ -1113,6 +1212,8 @@ def main():
 
     if gate:
         notes.append(gate[1])
+    if cp_note:
+        notes.append(cp_note)
     if observed:
         notes.append('наблюдение за ответом (журнал logs/answer-check.jsonl; в блокирующем режиме ход был бы продлён): ' + '; '.join(observed))
     if not notes:

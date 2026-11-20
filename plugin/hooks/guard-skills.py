@@ -189,9 +189,20 @@ RULES = [
 ]
 CONTOURS = ['guard-destructive', 'guard-skills', 'support-guard', 'validate-bsl', 'stop-guard', 'enrich-code-facts', 'subagent-gate',
             'scan-inbound', 'health-check', 'prompt-gate', 'postcompact-note', 'answer-feedback', 'lint-project-docs',
-            'failure-streak', 'repeat-guard', 'shell-arm']
+            'failure-streak', 'repeat-guard', 'shell-arm', 'guard-personal-data', 'session-start']
 RANK = {'on': 2, 'error': 2, 'block': 2, 'warn': 1, 'off': 0}
 EXEMPT = {'.claude', 'docs', 'docs-project', 'tools', 'node_modules', '.git'}
+
+
+def in_head(path):
+    """Файл есть в HEAD своего git (по образцу stop-guard.c0_module); нет git или ошибка — False."""
+    import subprocess   # только для этой ветки: частый хук не платит за импорт на каждой правке
+    d, name = os.path.split(os.path.abspath(path))
+    try:
+        return subprocess.run(['git', '--no-optional-locks', '-C', d, 'cat-file', '-e', 'HEAD:./' + name],
+                              capture_output=True, timeout=5).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def exempt(norm, data):
@@ -499,8 +510,9 @@ def main():
              'защиту сразу, в обход проверки. Плагин меняется только обновлением: claude plugin update. Если защита мешает — '
              'скажи владельцу, что и зачем.')
     # Настройки анализатора: правка существующего файла, чтобы проверка прошла, вместо исправления кода (решение владельца
-    # 05.11.2026, по мотивам config-protection ECC — docs/sources/ecc-review.md). Новый файл — можно.
-    if re.search(r'(^|/)\.bsl-language-server\.json$', norm) and os.path.isfile(path):
+    # 05.11.2026, по мотивам config-protection ECC — docs/sources/ecc-review.md). Новый файл — можно; удалённый оболочкой, но
+    # закоммиченный в HEAD — не новый (с 20.11.2026): удаление и запись заново — та же правка.
+    if re.search(r'(^|/)\.bsl-language-server\.json$', norm) and (os.path.isfile(path) or in_head(path)):
         deny('bug-diagnosis-loop Ф5: настройки BSL Language Server (.bsl-language-server.json) агент не правит — отключённая '
              'диагностика прячет замечание, а не исправляет код. Исправь код. Диагностика ложная — скажи владельцу, какая и '
              'почему; файл правит он.')
@@ -511,7 +523,8 @@ def main():
         deny('самозащита контуров: реестр сумм хуков не правится руками — его пересобирает tools/indexes/gen-contour-registry.py.')
     if re.search(r'/plugin/hooks/hooks\.json$', norm):
         cur, after = edit_result(data, path)
-        lost = [c for c in CONTOURS if c in cur and c not in after] if after is not None else []
+        # по числу подключений, как в настройках: guard-destructive стоит и на Bash, и на Read|Grep — снятие одного не скрыто другим
+        lost = [c for c in CONTOURS if after.count(c) < cur.count(c)] if after is not None else []
         if lost:
             deny('самозащита контуров: после правки из hooks.json пропадает проводка контура: %s. Перенос блока делай одной правкой, '
                  'снятие контура — только решением владельца.' % ', '.join(lost))

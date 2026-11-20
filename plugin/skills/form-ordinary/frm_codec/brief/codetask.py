@@ -477,7 +477,7 @@ def action_rows(lines, procedures, foreign=None):
     return list(out.values())
 
 
-_HEADER = re.compile(rf"(?im)^[ \t]*(?:Процедура|Функция)[ \t]+({scan.NAME})")
+_HEADER = re.compile(rf"(?im)^[ \t]*(?:Процедура|Функция|Procedure|Function)[ \t]+({scan.NAME})")
 
 
 def _find_many(config_dir, names):

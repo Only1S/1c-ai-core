@@ -1,14 +1,15 @@
-# contours.sha256 — реестр контуров принуждения: имя|sha256|описание (генератор tools/indexes/gen-contour-registry.ps1, руками не править)
+# contours.sha256 — реестр контуров принуждения: имя|sha256|описание (генератор tools/indexes/gen-contour-registry.py, руками не править)
 answer-feedback.py|b278c76381472df8c3fd025d4c97e912da229d12acfd270124c32c621d51974f|UserPromptSubmit: подсказка в следующем ходе — что проверки конца хода отметили в прошлых ответах этой сессии.
 ask-guard.tsx|b33c7b4cc4471bc7544a52b4e882b2b775188800ea4132c32b402af66b0ec8c1|// Мод «спросить вместо запрета» (М-2): отказ барьера guard-destructive с пометкой «Если это осознанное решение — выполни вручную сам»
+change-profile.py|550cc0013363915b90a4526946eab9b6da45e9670c4f3302335a4fd8a0bb2778|change-profile.py — профиль правки 1С по ТРЁМ осям, с фиксацией того, что подняло глубину.
 commit-rules.tsx|eb03b35cbbc29181ded5c80497479504789f327048a512694f7a3c83e71cc180|// Мод «правила коммита» (М-3): движок не просит модель добавлять строку Co-Authored-By в сообщение коммита и подпись
 core-pane.tsx|45c6d06102fe9b9904aa12927d8c24a3dbc590a6de0edffb1937370b3441510f|// Панель ядра сбоку от чата: команда /core открывает её, старт сессии — тоже, если окну хватает ширины;
 core-tools.tsx|5fb70ef9dcbbfb19f8634b353bfb208347040fc9aea88e6becb57f041f534f83|// Свои инструменты ядра только на чтение (волна 3, шаг 3.8): «состояние доработки» (work_status) и «проверки хода» (turn_checks).
 enrich-code-facts.py|73376c931635566ba9e82506b542bbe5f219779692dfce5ccc35bce972b66bf1|PreToolUse на Grep: подмешать факты из индекса кода (code-index), ничего не запрещая.
-failure-streak.py|863418b965012081f533fdd098ea500eb1a1c3db0002c3b4dd5604b7c442bec4|PostToolUseFailure: стоп при повторных сбоях инструментов — 3 подряд подсказка сменить подход, 5 — остановиться и спросить владельца.
-guard-destructive.py|654ef892817112e29d304ed9b8075eb15a40c74b74eed3d24bf12b7a9a1b29e3|PreToolUse: защита до выполнения — останавливает разрушительные и опасные команды.
+failure-streak.py|a533bbe98f0a20c781862bcc22ecf6d912d7cb25dd80604908d5f9c4f8028b23|PostToolUseFailure: стоп при повторных сбоях инструментов — 3 подряд подсказка сменить подход, 5 — остановиться и спросить владельца.
+guard-destructive.py|9dfcc4e53ddc0031229ce7dd2bc57414ea053af8881c4b3c1a84619325148e05|PreToolUse: защита до выполнения — останавливает разрушительные и опасные команды.
 guard-personal-data.py|14cb8882fecc95202ab0c026fd23884bc054c8123db2018daa083de23aebf986|PreToolUse на инструментах 1c-toolkit: данные базы 1С — только с базы без настоящих ПДн (personal-data-masked-from-1c).
-guard-skills.py|09e0bfb4f0fb024ac5d9123d1e0af117711151268b07fa0c6a619c1777920f29|PreToolUse: файл 1С правится скиллом, а не руками; плюс самозащита настроек и конфигов проверок.
+guard-skills.py|a0974891b1ae9d62a7a7ad305fea42282760d319407befaa818b5f1b8359b788|PreToolUse: файл 1С правится скиллом, а не руками; плюс самозащита настроек и конфигов проверок.
 hooks.json|26b37eb91d192ccd336b7faed0d89e535edc0589115275577aecca2f89abc00e|{
 inbound-filter.py|e4c79bc81fbac05a0556905d6fb9b633ec06f55cccdfb2a87b01d16ba0c562fd|Мод «чистка входящих» (волна 2 п.2.20), половина на Python: результат инструмента до модели — маска ПДн и пометка подложенных инструкций.
 inbound-filter.ts|8a690e76c58b022017b34bd64d2b0960fc8fd36ac7aeb077895a9001b1d92280|// Мод «чистка входящих» (волна 2 п.2.20): результат инструмента до модели — маска ПДн и пометка подложенных инструкций
@@ -18,18 +19,18 @@ owner-tasks.tsx|a5f136ecc0e05dde39d4cff61c7b9e54d2f606c53b15ed30db2acd677870bfb7
 postcompact-note.md|a7424600b684edcebaa0dfc1d478526433c04327b7b43029e756886c862ff5e1|⚙ после компакции: перечитай хвост docs-project/worklog.md и docs-project/changelog.md (правки самой конфигурации 1С, если она в своём gi...
 project-check.tsx|a4ce2b5b28f31528c3434073f94149fe2dd0feaabbfb8373b67aaaba5d13aeb2|// Мод «кнопка проверок»: команда /check запускает в фоне проверку проекта (tools/checks/project-check.py плагина:
 prompt-gate.py|809ec086529d782d960be4eb7ecbc6ddc448f6fb8e200d8724b2c3820ab9f10a|UserPromptSubmit: правила ядра (tools-gate.md) в контекст — целиком один раз на сессию и после сжатия, дальше одна строка.
-repeat-guard.py|2cbdc58645a884f45f7982ac2e5a1f476136d16fe180d63262f3716756baa3dc|PreToolUse: отказ на тождественный повтор вызова, который упал 3 раза подряд с теми же данными (часть 13-го контура).
+repeat-guard.py|fc5fe77acb6af117d49c9f8263a46bbeba36a896ee4e273ba8c70d1e0b051ba1|PreToolUse: отказ на тождественный повтор вызова, который упал 3 раза подряд с теми же данными (часть 13-го контура).
 run-python.ts|e63bd3b4af554200a2157e72ca5b04eac6f6057d4be9c39de8c84322de4f9b51|// Запуск Python из модов — единственный путь: «python» напрямую из мода не запускать (сверяет contour-tests §76)
 scan-inbound.py|e860891382dcd4ae2dda2f334173f25666e9ab9615be3a77eb2270e1f003453a|PostToolUse: признаки инъекции во внешнем контенте — предупредить, ничего не блокируя.
 session-start.py|accd363127eaa1b6664f646ac9313c247143db7c0a73713ccbc000861981860a|SessionStart (плагин): сказать модели, где лежат правила ядра, и проверить, на месте ли программы инструментов.
-shell-arm.py|7a32764e729596fb5e218caa710529bd116d989354558f593243d4c397b6ddc3|!/usr/bin/env python3
+shell-arm.py|887d4e3a7030e8dc1f4e0abdc75d12849dac360a6e6cd85746709a62bbcab92e|!/usr/bin/env python3
 status-band.d.ts|834f83cbd46da3727d91d4c3826d8705353aea9b25acd931166c4da9d9600d8b|// Контракт состояния модов плагина: панель ядра (status-band.tsx), «шаги задачи» (task-steps.tsx), «Доработка» (work-pane.tsx)
 status-band.tsx|7c948793dd9fd43a1cd61ba97e05c159fdfaf331a15aec797637353948644b18|// Панель ядра сбоку от чата: сбор данных и рисование (сбой фильтра, доработка и база, шаги, итог проверки, что нового); тексты — core-pa...
-stop-guard.py|cba51e7891f840bc4bab8264f1a56da24a0b1487aec7c62201087ca85c5b20ef|Stop и SubagentStop: блокирующий гейт для правок 1С и напоминания в конце хода (systemMessage).
+stop-guard.py|c74d895a461d189960b884e979558529d4052e2971e66f0f79af449fee6247cf|Stop и SubagentStop: блокирующий гейт для правок 1С и напоминания в конце хода (systemMessage).
 subagent-gate.py|6690a5c715d6d93b32733db408861b75f06544a3427834e27b6c22b7d1c0935b|Гейт помощников: правило «только через инструменты» субагенту и барьер согласия на запуск помощников.
 support-guard.py|ca70f2f4ebcd8fbeba9a039fd5cf9cd3c0a9dea67fb93dc713eabde33a41b018|PreToolUse на Edit/Write/MultiEdit: не дать вручную править объект типовой конфигурации на поддержке поставщика.
 task-steps.tsx|1476a062c3552a6230a157632429b3f281f1b8c8442f4cacaef6c5d675a040af|// Мод «шаги задачи»: инструмент модели — шаги с галочками в .claude/task-steps.json проекта; список — в панели ядра
 tools-gate.md|e0fbd5a9cac7b09891e144b1f66f7c264c84994b5309f6ed3daee3db34e64c46|⚙ work-through-tools (правило docs/tools/work-through-tools.md): представление и инструменты — по карте docs/tools/task-recipes.md §0. Фа...
-validate-bsl.py|0d4e0ccfec729f8c22d389e1e4416a9271d2f75d7afb4fbde2a6f1db329ca98d|PostToolUse: автопроверка модуля 1С (.bsl) сразу после правки.
+validate-bsl.py|0d4db370375266360a3c3c05305bafdfadc7462fab096979005e1eb8b6160893|PostToolUse: автопроверка модуля 1С (.bsl) сразу после правки.
 work-data.ts|eb2a2848f1b6b1ba6496208024149941f667ff5107cbc31fb695ab55be653128|// Данные панели «Доработка» (work-pane.tsx) и инструментов ядра на чтение (core-tools.tsx): портфель доработок, шаги задачи,
 work-pane.tsx|9bda5a46c67368e937cbd0c7446b2ed8db1fdd740c3692444746e1535797c017|// Мод «Доработка» (волна 3, шаг 3.2): /work открывает панель рядом с чатом — карточка и её стадия, шаги задачи

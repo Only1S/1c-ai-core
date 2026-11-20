@@ -4,12 +4,12 @@
     {
       "name": "code-index",
       "purpose": "индексатор кода 1С — поиск по коду, вызовы и связи (MCP-сервер code-index)",
-      "version": "1.15.6",
+      "version": "1.17.1",
       "license": "MIT",
       "repo": "Regsorm/code-index-mcp",
       "asset": "bsl-indexer-windows-x64.zip",
-      "url": "https://github.com/Regsorm/code-index-mcp/releases/download/v1.15.6/bsl-indexer-windows-x64.zip",
-      "sha256": "7b1150d8a82a456c8a74e99b87058161adb9e8760c3bcfe1ad6055eef68fec09",
+      "url": "https://github.com/Regsorm/code-index-mcp/releases/download/v1.17.1/bsl-indexer-windows-x64.zip",
+      "sha256": "6a0d9d59eb083f96b3b5a8663b8a21c1afe81e699668d7c2dc024e420272d72d",
       "kind": "zip",
       "extract": [
         "bsl-indexer.exe"
@@ -18,12 +18,12 @@
     {
       "name": "bsl-context",
       "purpose": "справка по встроенному языку и платформе 1С (MCP-сервер bsl-context)",
-      "version": "0.23.1",
+      "version": "0.24.1",
       "license": "MIT (с атрибуцией двух авторов)",
       "repo": "Regsorm/bsl-context",
       "asset": "bsl-context-windows-x64.zip",
-      "url": "https://github.com/Regsorm/bsl-context/releases/download/v0.23.1/bsl-context-windows-x64.zip",
-      "sha256": "147c2c30f8fe1406ddbee274e08aa292e730979f7dc9dafa5228c38bb9e48477",
+      "url": "https://github.com/Regsorm/bsl-context/releases/download/v0.24.1/bsl-context-windows-x64.zip",
+      "sha256": "1986343d89af0cd1e09378982a5fcfef027d299d5571c9fa82ea61f15d4415d6",
       "kind": "zip",
       "extract": [
         "bsl-context-rs.exe"
@@ -32,12 +32,12 @@
     {
       "name": "bsl-analyzer",
       "purpose": "анализатор кода 1С — автоматическая проверка после каждой правки модуля .bsl",
-      "version": "0.4.0",
+      "version": "0.4.6",
       "license": "LGPL-3.0-or-later (поставляемая сборка)",
       "repo": "itrous/bsl-analyzer",
       "asset": "bsl-analyzer-windows-amd64.exe",
-      "url": "https://github.com/itrous/bsl-analyzer/releases/download/v0.4.0/bsl-analyzer-windows-amd64.exe",
-      "sha256": "ca1171a07b4b06584fd062158ffc187e8d755043fba5d0b349f8a29f4e54dbcb",
+      "url": "https://github.com/itrous/bsl-analyzer/releases/download/v0.4.6/bsl-analyzer-windows-amd64.exe",
+      "sha256": "c816d273b176785311e7df30cdfee470b60c82906e010ec9e37322cb65d9cc21",
       "kind": "file",
       "save_as": "bsl-analyzer.exe"
     },
@@ -69,12 +69,12 @@
     {
       "name": "mcp-toolkit",
       "purpose": "обработка для базы 1С: через неё сервер 1c-toolkit выполняет запросы и код в тестовой базе (открывается в базе вручную)",
-      "version": "1.9.0",
+      "version": "1.10.0",
       "license": "GPL-3.0",
       "repo": "ROCTUP/1c-mcp-toolkit",
       "asset": "MCP_Toolkit.epf",
-      "url": "https://github.com/ROCTUP/1c-mcp-toolkit/releases/download/v1.9.0/MCP_Toolkit.epf",
-      "sha256": "aae9b09a66410ce1714537d06eb8869d8cf8b7b2b7fb5ac3f7858f0eb4678c20",
+      "url": "https://github.com/ROCTUP/1c-mcp-toolkit/releases/download/v1.10.0/MCP_Toolkit.epf",
+      "sha256": "03fd32f3d5bd556c98f30ee789f69ebdfbce8327205eb060af94d6752cd2ca18",
       "kind": "file"
     },
     {
@@ -106,7 +106,7 @@
       "license": "Only1S (закрытая); сторонние — MIT и GPL-2.0 с Classpath Exception, см. THIRD-PARTY.md",
       "optional": true,
       "fetch": "gh-release",
-      "repo": "Only1S/1c-ai-core",
+      "repo": "Only1S/ones-core",
       "asset": "obfuscator.zip",
       "kind": "zip",
       "verify": "inner-sha256",
@@ -161,12 +161,12 @@
     {
       "name": "vanessa-automation",
       "purpose": "Vanessa Automation — движок сценариев .feature в клиенте 1С (харнесс передаёт его vrunner ключом --bddrunner-path; add 6.9.5 не разбирает режим совместимости «Не использовать» и английские конфигурации)",
-      "version": "1.2.043.45",
+      "version": "1.2.043.47",
       "license": "BSD-3-Clause",
       "repo": "Pr-Mex/vanessa-automation",
-      "asset": "vanessa-automation-single.1.2.043.45.zip",
-      "url": "https://github.com/Pr-Mex/vanessa-automation/releases/download/1.2.043.45/vanessa-automation-single.1.2.043.45.zip",
-      "sha256": "541b5a454b8997d9600b1c857ae82c2b2796c092682dded4d352818b2fd515d2",
+      "asset": "vanessa-automation-single.1.2.043.47.zip",
+      "url": "https://github.com/Pr-Mex/vanessa-automation/releases/download/1.2.043.47/vanessa-automation-single.1.2.043.47.zip",
+      "sha256": "824285bfb3efce589defc19fe60b211ef1001646ceb11a541251e89784f17b21",
       "kind": "zip",
       "extract": [
         "vanessa-automation-single.epf"
