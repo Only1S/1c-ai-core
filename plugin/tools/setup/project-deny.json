@@ -69,14 +69,14 @@
     "Edit(~/Documents/PowerShell/**)",
     "Edit(~/.bashrc)",
     "Edit(~/AppData/Local/Google/cd4a/**)",
-    "Edit(~/.config/cd4a/**)",
-    "mcp__computer-use",
-    "mcp__claude-in-chrome__computer",
-    "mcp__Claude_Browser__computer"
+    "Edit(~/.config/cd4a/**)"
   ],
   "retired": [
     "Write(~/AppData/Local/Google/cd4a/**)",
     "Write(~/.config/cd4a/**)",
-    "Bash(git push --force*)"
+    "Bash(git push --force*)",
+    "mcp__computer-use",
+    "mcp__claude-in-chrome__computer",
+    "mcp__Claude_Browser__computer"
   ]
 }

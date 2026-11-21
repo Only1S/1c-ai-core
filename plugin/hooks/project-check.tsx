@@ -33,7 +33,7 @@ export function verdictOf (stdout: string, exitCode: number): CheckVerdict {
   return { level: 'fail', text: 'проверка не дала вердикта (код ' + exitCode + ')' + (tail ? ': ' + tail.slice(0, 160) : '') }
 }
 
-/** Строки ошибок и замечаний из вывода project-check.py — в панель, каждая своей строкой. */
+/** Строки ошибок и замечаний из вывода project-check.py, каждая своей строкой. */
 export function itemsOf (stdout: string): string[] {
   return stdout.split(/\r?\n/).flatMap(l => /^\[(FAIL|WARN)\]\s+(.+)$/.exec(l)?.[2] ?? []).slice(0, ITEMS_MAX).map(s => s.slice(0, ITEM_MAX))
 }
@@ -49,7 +49,7 @@ export async function declareCheck ($: EngineInterface) {
   } catch {}
 }
 
-/** Вердикт — уведомлением; где его некуда отправить — всплывашкой. В чат не пишется: итог остаётся в панели ядра. */
+/** Вердикт — уведомлением; где его некуда отправить — всплывашкой. Подробности — в отчёте проекта (REPORT). */
 async function announce ($: EngineInterface, text: string) {
   try {
     const sent = await $.ui.notify(text, { title: 'ones-core' })
@@ -72,7 +72,7 @@ async function runCheck ($: EngineInterface) {
   }
   const at = await $.clock.now().catch(() => null)
   await update($, last, () => ({ running: false, at, level: v.level, text: v.text, items }))
-  // чистый итог уходит из панели сам; новая проверка за это время его заменит, и таймер её не тронет
+  // чистый итог забывается сам; новая проверка за это время его заменит, и таймер её не тронет
   if (v.level === 'ok') $.clock.after(CLEAN_SHOW_MS, () => { void update($, last, c => (c?.running === false && c.at === at ? null : c)).catch(() => undefined) })
   await announce($, 'Проверка проекта: ' + v.text)
 }
@@ -80,7 +80,7 @@ async function runCheck ($: EngineInterface) {
 // Прогон один за раз: повторная команда во время прогона его не дублирует
 let running: Promise<void> | null = null
 
-/** Запуск в фоне для команды и кнопки панели; уже идёт — false. */
+/** Запуск в фоне по команде /check; уже идёт — false. */
 export function startCheck ($: EngineInterface): boolean {
   if (running !== null) return false
   running = update($, last, c => ({ running: true, at: c?.at ?? null, level: c?.level ?? null, text: c?.text ?? '', items: c?.items ?? [] }))
@@ -89,7 +89,7 @@ export function startCheck ($: EngineInterface): boolean {
   return true
 }
 
-/** Команда отвечает сразу, прогон идёт в фоне. В модуле один старт сессии без отбора (его держит status-band.tsx): свой — с отбором. */
+/** Команда отвечает сразу, прогон идёт в фоне. Старт сессии — с отбором: так он не мешает другим модам плагина. */
 export function serveCheck (on: On) {
   on('session.start', { cwd: /^/ }, async ($, e, next) => {
     await declareCheck($)

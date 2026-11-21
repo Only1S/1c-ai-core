@@ -13,6 +13,7 @@
 Волна 1 (замер 29.10.2026): запреты проекта против шаблона плагина (недостающие и снятые — команда connect-project --deny-only),
 версия установленных программ против манифеста этой сборки, посторонние плагины и их модули (кроме ones-core и ONEC_PLUGINS_ALLOW).
 Замер 30.10.2026: нет бюджета списка скиллов в настройках проекта — та же команда.
+С 20.11.2026 (решение владельца): нет переменной встроенного списка задач Claude Code — дописывается в env настроек проекта.
 В мастере ядра (без CLAUDE_PLUGIN_ROOT) молчит: там docs/ лежит в корне проекта. Любая ошибка — молча.
 """
 import json
@@ -77,6 +78,31 @@ def deny_check(root, proj):
         notes.append('В .claude/settings.json проекта нет бюджета списка скиллов (skillListingBudgetFraction): описания части скиллов '
                      'плагина не доходят до модели, а плагин сам этот ключ не пишет. Скажи владельцу и с его «да» допиши: %s' % cmd)
     return notes
+
+
+TODO_KEY = 'CLAUDE_CODE_ENABLE_TODO_TOOLS'
+
+
+def todo_tools(proj):
+    """Встроенный список задач Claude Code (решение владельца 20.11.2026): на Opus 5.x его инструменты есть только с переменной.
+    Нет её ни в окружении, ни в env настроек проекта — дописать в env .claude/settings.json (подключённого проекта; битый файл
+    не трогается); Claude Code подхватывает правку настроек на ходу. Свой выбор проекта или пользователя (любое значение) не трогается."""
+    sp = os.path.join(proj, '.claude', 'settings.json') if proj else ''
+    if not sp or os.environ.get(TODO_KEY) is not None or not os.path.isfile(sp):
+        return []
+    if any(isinstance(obj(os.path.join(proj, '.claude', f)).get('env'), dict) and TODO_KEY in obj(os.path.join(proj, '.claude', f))['env']
+           for f in ('settings.json', 'settings.local.json')):
+        return []
+    with open(sp, encoding='utf-8-sig') as f:
+        s = json.load(f)   # битый файл — исключение, safe() вернёт []: не переписывать то, что не разобрано
+    if not isinstance(s, dict) or not isinstance(s.setdefault('env', {}), dict):
+        return []
+    s['env'][TODO_KEY] = '1'
+    with open(sp, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(s, f, ensure_ascii=False, indent=2)
+        f.write('\n')
+    return ['Включён встроенный список задач Claude Code: в env .claude/settings.json проекта дописано %s=1 (решение владельца). '
+            'Шаги многошаговой задачи веди инструментами TaskCreate и TaskUpdate.' % TODO_KEY]
 
 
 def plugin_modules(path):
@@ -243,6 +269,7 @@ def main():
             pass
     proj = os.environ.get('CLAUDE_PROJECT_DIR') or ''
     lines += safe(deny_check, root, proj)
+    lines += safe(todo_tools, proj)
     lines += safe(plugin_checks, proj)
     lines += profile_checks()
     sys.stdout.buffer.write(('\n'.join(lines) + '\n').encode('utf-8'))

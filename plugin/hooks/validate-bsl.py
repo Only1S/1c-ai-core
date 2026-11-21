@@ -8,9 +8,12 @@
      обратное наложение кусков; ключ — правило и текст сообщения), — тоже блок: удаление «КонецЕсли;» ломает чужую строку.
      Семейства, которые на одиночном файле дают ложные срабатывания (метаданные не резолвятся), не блокируют — их список
      ниже, расширять только с замером. Модуль формы EDT (Form.form рядом): анализ копии по пути формы Конфигуратора и снятие
-     Unused* по обработчикам и реквизитам из Form.form (Only1S/1c-ai-core#5). Все блокирующие находки правки — разом.
+     Unused* по обработчикам и реквизитам из Form.form (Only1S/1c-ai-core#5). Модуль объекта, набора записей, менеджера значения
+     (C9-4): копия описания <Вид>/<Имя>.xml рядом с модулем выгрузки Конфигуратора и снятие Unused* по своим реквизитам из .mdo
+     (EDT) и стандартным свойствам вида (оба формата). Все блокирующие находки правки — разом.
   2. Языковой профиль: смешение кириллицы и латиницы в одном имени блокирует; латинские сокращения из имён
      самой платформы (ЧтениеXML, HTTPСоединение) нарушением не считаются.
+  Write, сменивший переводы строк файла целиком относительно HEAD, — подсказка модели без блока (с 20.11.2026).
   0. Правка .bsl отмечается в logs/gate-state.json проекта: в конце хода напомнят записать прогон проверок
      (режим наблюдения — ничего не блокирует). Служебные зоны и временная папка вне проекта не взводят — тот же
      отбор, что у гейта конца хода (с 4.6.1: песочница помощника в %TEMP% держала напоминание всю сессию).
@@ -238,11 +241,37 @@ def run_analyzer(exe, f, text=None):
     d = os.path.dirname(f)
     tmp = os.path.join(tempfile.gettempdir(), 'bslhook_%d' % os.getpid())
     shutil.rmtree(tmp, ignore_errors=True)
-    src, cfg = d, []
+    src, cfg, changed, mini = d, [], os.path.basename(f), False
     try:
         # модуль формы EDT (Form.form рядом): модуль формы движок узнаёт только по пути Forms/<Ф>/Ext/Form/Module.bsl
         edt_form = os.path.basename(f).lower() == 'module.bsl' and os.path.isfile(os.path.join(d, 'Form.form'))
-        if edt_form or text is not None:
+        obj = object_module(f)
+        if obj and obj[0] == 'xml' and os.path.basename(f).lower() == 'objectmodule.bsl':
+            # модуль объекта выгрузки Конфигуратора (C9-4): копия описания <Вид>/<Имя>.xml рядом — движок видит свои реквизиты;
+            # Configuration.xml не копируется: с ним — ложные UnresolvedMetadataPath на чужие объекты
+            try:
+                mod = os.path.join(tmp, 'src', obj[1], obj[2], 'Ext', os.path.basename(f))
+                os.makedirs(os.path.dirname(mod))
+                shutil.copyfile(obj[3], os.path.join(tmp, 'src', obj[1], obj[2] + '.xml'))
+                if text is None:
+                    shutil.copyfile(f, mod)
+                else:
+                    with open(f, 'rb') as fh:
+                        bom = fh.read(3) == b'\xef\xbb\xbf' and not text.startswith('\ufeff')
+                    with open(mod, 'wb') as fh:
+                        fh.write((b'\xef\xbb\xbf' if bom else b'') + text.encode('utf-8'))
+                mini = os.path.isfile(mod)   # несуществующий путь в --changed-files движок молча считает чистым
+            except OSError:
+                mini = False                 # описание не читается — прежняя раскладка, а не сбой всего хука
+            if mini:
+                src, changed = os.path.join(tmp, 'src'), '/'.join((obj[1], obj[2], 'Ext', os.path.basename(f)))
+                conf = project_config(d)
+                cfg = ['-c', conf] if conf else []
+            else:
+                shutil.rmtree(os.path.join(tmp, 'src'), ignore_errors=True)
+        if mini:
+            pass
+        elif edt_form or text is not None:
             # копия — под теми же последними папками пути (по ним движок узнаёт вид модуля), Form.xml формы — уровнем выше
             parts = ['Forms', 'F', 'Ext', 'Form'] if edt_form else [p for p in re.split(r'[\\/]', os.path.splitdrive(d)[1]) if p][-4:]
             src = os.path.join(tmp, 'src', *parts)
@@ -261,7 +290,7 @@ def run_analyzer(exe, f, text=None):
             cfg = ['-c', conf] if conf else []   # копия во временной папке иначе теряет настройки проекта
         left = 55 if DEADLINE is None else max(1, min(55, DEADLINE - time.time()))
         # --changed-files — путь ОТНОСИТЕЛЬНО -s: с абсолютным анализатор молча находит 0 замечаний
-        subprocess.run([exe, 'analyze', '--incremental', '-s', src, '--changed-files', os.path.basename(f),
+        subprocess.run([exe, 'analyze', '--incremental', '-s', src, '--changed-files', changed,
                         '-r', 'sarif', '-o', tmp, '-q'] + cfg, capture_output=True, timeout=left)
         rep = os.path.join(tmp, 'bsl-analyzer.sarif')
         if not os.path.isfile(rep):
@@ -283,16 +312,43 @@ def run_analyzer(exe, f, text=None):
             uri = r['locations'][0]['physicalLocation']['artifactLocation']['uri']
         except (KeyError, IndexError, TypeError):
             uri = ''
-        if r.get('level') in ('error', 'warning') and not re.search(FALSE_FAMILIES, str(r.get('ruleId') or ''), re.I) and re.search(leaf, uri, re.I):
+        if r.get('level') in ('error', 'warning') and not re.search(FALSE_FAMILIES, str(r.get('ruleId') or ''), re.I) and re.search(leaf, uri, re.I) \
+                and not (mini and r.get('ruleId') in METADATA_ONLY):
             errs.append(r)
     errs, dropped = drop_edt_form_false(f, errs, text)
     if dropped and text is None:
         CONTEXT.append('bsl-analyzer: снято %d находок Unused* по Form.form — обработчики и реквизиты формы EDT, привязку которых '
                        'движок не читает (Only1S/1c-ai-core#5)' % dropped)
+    errs, dropped = drop_object_false(f, errs, text)
+    if dropped and text is None:
+        CONTEXT.append('bsl-analyzer: снято %d находок Unused* по описанию объекта — свои реквизиты и стандартные свойства, которых '
+                       'движок без модели конфигурации не знает (C9-4)' % dropped)
     return errs
 
 
 METHOD = re.compile(r'^\s*(?:Асинх\s+|Async\s+)?(?:Процедура|Функция|Procedure|Function)\s+(\w+)\s*\(', re.I)
+
+
+def bom_first_line(f, text=None):
+    """1 — движок считает BOM колонкой строки 1 (зонд R1, 20.11.2026): у файла с BOM колонки находок строки 1 сдвинуты на 1."""
+    if text is not None and text.startswith('\ufeff'):
+        return 1
+    try:
+        with open(f, 'rb') as fh:
+            return 1 if fh.read(3) == b'\xef\xbb\xbf' else 0
+    except OSError:
+        return 0
+
+
+def found_name(e, lines, bom):
+    """(строка, имя под находкой в нижнем регистре) по startColumn/endColumn; не разобрано — (0, '')."""
+    try:
+        r = e['locations'][0]['physicalLocation']['region']
+        n = int(r['startLine'])
+        shift = bom if n == 1 else 0
+        return n, lines[n - 1][int(r['startColumn']) - 1 - shift:int(r['endColumn']) - 1 - shift].strip().lower()
+    except (KeyError, IndexError, TypeError, ValueError):
+        return 0, ''
 
 
 def drop_edt_form_false(f, errs, text=None):
@@ -308,17 +364,14 @@ def drop_edt_form_false(f, errs, text=None):
         return errs, 0
     handlers = {(e.findtext('name') or '').strip().lower() for tag in ('handlers', 'handler') for e in root.iter(tag)} - {''}
     attrs = {(e.findtext('name') or '').strip().lower() for e in root.findall('attributes')} - {''}
+    bom = bom_first_line(f, text)
     if text is None:
         with open(f, encoding='utf-8-sig') as fh:
             text = fh.read()
-    lines = text.split('\n')
+    lines = text.lstrip('\ufeff').split('\n')
 
     def ident(e):
-        try:
-            r = e['locations'][0]['physicalLocation']['region']
-            return lines[int(r['startLine']) - 1][int(r['startColumn']) - 1:int(r['endColumn']) - 1].strip().lower()
-        except (KeyError, IndexError, TypeError, ValueError):
-            return ''
+        return found_name(e, lines, bom)[1]
 
     def owner(n):
         for k in range(min(n, len(lines)) - 1, -1, -1):
@@ -329,6 +382,149 @@ def drop_edt_form_false(f, errs, text=None):
     keep = [e for e in errs if not ((e.get('ruleId') == 'UnusedLocalMethod' and ident(e) in handlers)
                                     or (e.get('ruleId') in ('UnusedLocalVariable', 'UninitializedLocalVariable') and ident(e) in attrs)
                                     or (e.get('ruleId') == 'UnusedParameters' and owner(error_line(e)) in handlers))]
+    return keep, len(errs) - len(keep)
+
+
+# Модули объектов (C9-4, решение владельца 20.11.2026): без модели конфигурации движок принимает присваивание реквизиту объекта
+# или стандартному свойству голым именем («Наименование = …» в ПередЗаписью) за неиспользуемую переменную. Замер на БП 3.0:
+# выгрузка Конфигуратора — копия описания объекта <Вид>/<Имя>.xml рядом с модулем снимает свои реквизиты (36 из 64, настоящих
+# потерь 0; Configuration.xml не копировать — 80 ложных UnresolvedMetadataPath); EDT (.mdo движок не читает) — фильтр по именам
+# снял 1731 ложную находку из 2997 на 2058 модулях без единой настоящей. Стандартные свойства — по виду объекта (сверены
+# bsl-context, bsl-platform и bsl-ls, платформа 8.3.27; движок без модели их не знает ни в одном формате); свойства только для
+# чтения не снимаются — голое присваивание им ошибка. Не свои реквизиты: колонки табличных частей и признаки учёта субконто
+# (колонки ТЧ ВидыСубконто). Копия описания — только модулю объекта: у набора записей с ней движок прячет настоящие переменные
+# с именами измерений (поля записи голым именем недоступны по платформе), а замечания к именам метаданных
+# (ForbiddenMetadataName и подобные) к правке кода не относятся — снимаются (проверка R1/R2, 20.11.2026).
+OBJECT_MODULES = ('objectmodule.bsl', 'recordsetmodule.bsl', 'valuemanagermodule.bsl', 'managermodule.bsl')
+STD_PROPS = {
+    ('catalogs', 'objectmodule.bsl'): ('Владелец Owner ИмяПредопределенныхДанных PredefinedDataName Код Code Наименование Description '
+        'ПометкаУдаления DeletionMark Родитель Parent'),
+    ('documents', 'objectmodule.bsl'): 'Дата Date Номер Number ПометкаУдаления DeletionMark Проведен Posted',
+    ('chartsofcharacteristictypes', 'objectmodule.bsl'): ('ИмяПредопределенныхДанных PredefinedDataName Код Code Наименование Description ПометкаУдаления '
+        'DeletionMark Родитель Parent ТипЗначения ValueType'),
+    ('chartsofaccounts', 'objectmodule.bsl'): ('Вид Type Забалансовый OffBalance ИмяПредопределенныхДанных PredefinedDataName Код Code '
+        'Наименование Description ПометкаУдаления DeletionMark Порядок Order Родитель Parent'),
+    ('chartsofcalculationtypes', 'objectmodule.bsl'): ('ИмяПредопределенныхДанных PredefinedDataName Код Code Наименование Description '
+        'ПериодДействияБазовый ActionPeriodIsBasic ПометкаУдаления DeletionMark'),
+    ('exchangeplans', 'objectmodule.bsl'): ('Код Code Наименование Description НомерОтправленного SentNo НомерПринятого ReceivedNo '
+        'ПометкаУдаления DeletionMark ЭтотУзел ThisNode'),
+    ('businessprocesses', 'objectmodule.bsl'): ('ВедущаяЗадача HeadTask Дата Date Завершен Completed Номер Number ПометкаУдаления DeletionMark '
+        'Стартован Started'),
+    ('tasks', 'objectmodule.bsl'): ('БизнесПроцесс BusinessProcess Выполнена Executed Дата Date Наименование Description Номер Number '
+        'ПометкаУдаления DeletionMark ТочкаМаршрута RoutePoint'),
+    ('dataprocessors', 'objectmodule.bsl'): '',
+    ('reports', 'objectmodule.bsl'): 'СхемаКомпоновкиДанных DataCompositionSchema',
+    ('informationregisters', 'recordsetmodule.bsl'): 'Записывать Write РасширенныеРежимыЗамещения ExtendedReplaceMode',
+    ('accumulationregisters', 'recordsetmodule.bsl'): ('БлокироватьДляИзменения LockForUpdate Записывать Write РасширенныеРежимыЗамещения '
+        'ExtendedReplaceMode'),
+    ('accountingregisters', 'recordsetmodule.bsl'): 'БлокироватьДляИзменения LockForUpdate Записывать Write',
+    ('calculationregisters', 'recordsetmodule.bsl'): 'Записывать Write',
+    ('constants', 'valuemanagermodule.bsl'): 'Значение Value',
+}
+# свои реквизиты из описания объекта, которые модуль объекта видит голым именем: элементы .mdo верхнего уровня и ChildObjects .xml
+OWN_MDO = ('attributes', 'tabularSections', 'accountingFlags', 'addressingAttributes')
+OWN_XML = ('Attribute', 'TabularSection', 'AccountingFlag', 'AddressingAttribute')
+# замечания движка к именам метаданных из копии описания объекта: о метаданных, а не о правленом коде
+METADATA_ONLY = ('ForbiddenMetadataName', 'SameMetadataObjectAndChildNames')
+# обработчики, которые движок без модели не узнаёт: UnusedParameters по ним ложные (замер: 58 находок в 32 отчётах)
+OBJECT_HANDLERS = {('reports', 'objectmodule.bsl'): ('прикомпоновкерезультата', 'oncomposeresult')}
+END_METHOD = re.compile(r'^\s*(?:КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)\b', re.I)
+VAR_LINE = re.compile(r'^\s*(?:Перем|Var)\s+([^;]*)', re.I)
+
+
+def object_module(f):
+    """Модуль объекта рядом со своим описанием: ('xml'|'edt', вид, имя, путь описания) или None.
+    Конфигуратор — <Вид>/<Имя>/Ext/<Модуль>.bsl и <Вид>/<Имя>.xml; EDT — <Вид>/<Имя>/<Модуль>.bsl и <Вид>/<Имя>/<Имя>.mdo."""
+    if os.path.basename(f).lower() not in OBJECT_MODULES:
+        return None
+    d = os.path.dirname(f)
+    if os.path.basename(d).lower() == 'ext':
+        obj = os.path.dirname(d)
+        desc = os.path.join(os.path.dirname(obj), os.path.basename(obj) + '.xml')
+        if os.path.isfile(desc):
+            return 'xml', os.path.basename(os.path.dirname(obj)), os.path.basename(obj), desc
+    desc = os.path.join(d, os.path.basename(d) + '.mdo')   # объект EDT, в том числе с именем «Ext»
+    if not os.path.isfile(desc):
+        return None
+    return 'edt', os.path.basename(os.path.dirname(d)), os.path.basename(d), desc
+
+
+def own_names(fmt, desc):
+    """Имена своих реквизитов и табличных частей из описания объекта; описание не разобрано — None (ничего не снимать)."""
+    import xml.etree.ElementTree as ET   # здесь, а не в начале: разбор нужен только модулям объектов
+    try:
+        root = ET.parse(desc).getroot()
+    except (OSError, ET.ParseError):
+        return None
+    if fmt == 'edt':
+        return {(e.findtext('name') or '').strip().lower() for e in root if e.tag in OWN_MDO} - {''}
+    local = lambda e: e.tag.rsplit('}', 1)[-1]
+    obj = next(iter(root), None)   # <Catalog>, <Document>… — сам объект; колонки его ТЧ лежат глубже и в контекст не входят
+    kids = next((c for c in obj if local(c) == 'ChildObjects'), None) if obj is not None else None
+    return {(p.text or '').strip().lower() for e in (kids if kids is not None else ()) if local(e) in OWN_XML
+            for props in e if local(props) == 'Properties' for p in props if local(p) == 'Name'} - {''}
+
+
+def drop_object_false(f, errs, text=None):
+    """Модуль объекта, набора записей или менеджера значения (C9-4): снять UnusedLocalVariable и UninitializedLocalVariable по
+    своим реквизитам из описания объекта и стандартным свойствам вида, кроме имён, объявленных «Перем» в методе находки;
+    UninitializedLocalVariable по переменной модуля; UnusedParameters обработчиков из OBJECT_HANDLERS. (оставшиеся, сколько снято).
+    Описание не найдено или не разобрано — ничего не снимается."""
+    obj = object_module(f) if errs else None
+    key = (obj[1].lower(), os.path.basename(f).lower()) if obj else None
+    if key not in STD_PROPS:
+        return errs, 0
+    own = own_names(obj[0], obj[3]) if key[1] == 'objectmodule.bsl' else set()
+    if own is None:
+        return errs, 0
+    names = own | {x.lower() for x in STD_PROPS[key].split()}
+    bom = bom_first_line(f, text)
+    if text is None:
+        with open(f, encoding='utf-8-sig') as fh:
+            text = fh.read()
+    lines = text.lstrip('\ufeff').split('\n')
+    spans, start = [], None
+    for i, ln in enumerate(lines, 1):
+        mt = METHOD.match(ln)
+        if start is None and mt:
+            start = (i, mt.group(1).lower())
+        elif start is not None and END_METHOD.match(ln):
+            spans.append((start[0], i, start[1]))
+            start = None
+
+    def declared(rng):
+        """Имена из «Перем … ;» в строках rng, объявление может идти на нескольких строках."""
+        out, buf = set(), None
+        for i in rng:
+            ln = lines[i - 1].split('//', 1)[0]
+            if buf is None:
+                m = VAR_LINE.match(ln)
+                if not m:
+                    continue
+                buf = ln[m.start(1):]
+            else:
+                buf += ' ' + ln
+            if ';' in buf:
+                out |= {re.sub(r'\s+(Экспорт|Export)\s*$', '', x.strip(), flags=re.I).lower() for x in buf.split(';', 1)[0].split(',')}
+                buf = None
+        return out
+    inside = {i for s, e, _ in spans for i in range(s, e + 1)}
+    module_vars = declared(i for i in range(1, len(lines) + 1) if i not in inside)
+    handlers = OBJECT_HANDLERS.get(key, ())
+    keep = []
+    for e in errs:
+        rule = e.get('ruleId')
+        line = error_line(e)
+        span = next(((s, en, n) for s, en, n in spans if s <= line <= en), None)
+        if rule in ('UnusedLocalVariable', 'UninitializedLocalVariable'):
+            nm = found_name(e, lines, bom)[1]
+            in_method = nm in declared(range(span[0], span[1] + 1)) if span else False
+            if nm and not in_method and (nm in names and nm not in module_vars
+                                          or rule == 'UninitializedLocalVariable' and nm in module_vars):
+                continue
+        if rule == 'UnusedParameters' and span and span[2] in handlers:
+            continue
+        keep.append(e)
     return keep, len(errs) - len(keep)
 
 
@@ -554,6 +750,24 @@ def head_had_bom(f):
     return r.stdout.startswith(b'\xef\xbb\xbf') if r.returncode == 0 else None
 
 
+def head_eol_switch(f):
+    """Файл целиком сменил стиль переводов строк относительно HEAD — «CRLF → LF»; None — не сменил, файла в HEAD нет или git
+    недоступен. HEAD берётся с фильтрами checkout (--filters): репозиторий с нормализацией хранит LF, а рабочая копия — CRLF."""
+    try:
+        r = subprocess.run(['git', '--no-optional-locks', '-C', os.path.dirname(f), 'cat-file', '--filters',
+                            'HEAD:./' + os.path.basename(f)], capture_output=True, timeout=15)
+        with open(f, 'rb') as fh:
+            now = fh.read()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    def style(b):
+        n = b.count(b'\n')
+        return None if not n else 'CRLF' if b.count(b'\r\n') * 2 > n else 'LF'
+    was, cur = (style(r.stdout), style(now)) if r.returncode == 0 else (None, None)
+    return '%s → %s' % (was, cur) if was and cur and was != cur else None
+
+
 def hygiene(f, mine):
     """Нарушения гигиены: [(строка, что)]; mine — строки правки (None — файл новый, весь свой)."""
     with open(f, 'rb') as fh:
@@ -686,6 +900,13 @@ def check():
                        '(bug-diagnosis-loop Ф5). Перенос утверждения или согласованная правка теста — скажи об этом в ответе'
                        % os.path.basename(f))
 
+    # Write переписывает модуль с CRLF целиком на LF (зонд 10.11.2026): git покажет весь файл изменённым — подсказка без блока
+    # (решение владельца 20.11.2026); Edit стиль файла сохраняет, поэтому проверяется только Write
+    eol = head_eol_switch(f) if j.get('tool_name') == 'Write' else None
+    if eol:
+        CONTEXT.append('%s: переводы строк сменились целиком (%s) относительно последнего коммита — git покажет изменённым весь '
+                       'файл, слияние веток усложнится. Верни стиль файла: существующий модуль правь Edit, Write переписывает '
+                       'его с LF (не блокирует)' % (os.path.basename(f), eol))
     dirty = hygiene(f, mine)
     if dirty:
         err('гигиена файла: %d нарушений в %s — %s. Исправь до продолжения: тире в коде — на минус «-», управляющие и '

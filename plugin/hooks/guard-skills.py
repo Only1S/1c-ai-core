@@ -14,9 +14,10 @@
   - барьер источника (с 17.10.2026): вызов внешнего скилла не из белого списка (allowed-skill-sources; с 30.10.2026 скилл без
     приставки — только встроенный из BUILTIN_SKILLS или лежащий в проекте или плагине) и обращение
     к MCP-серверу 1С, не объявленному в .mcp.json проекта или плагина ones-core (use-own-mcp-servers-only), — отклоняются;
-    с волны 1 — и любой другой сервер, в том числе подключение claude.ai (mcp__<uuid>__*), вне .mcp.json, плагина ones-core,
-    серверов приложения APP_SERVERS и списка разрешённых ONEC_MCP_ALLOW; расширить этот список (и ONEC_PLUGINS_ALLOW)
-    правкой настроек нельзя — только владельцу;
+    с волны 1 — и любой другой сервер вне .mcp.json, плагина ones-core, серверов приложения APP_SERVERS и списка разрешённых
+    ONEC_MCP_ALLOW; расширить этот список (и ONEC_PLUGINS_ALLOW) правкой настроек нельзя — только владельцу. Подключения
+    claude.ai владельца (mcp__<uuid>__*) с 20.11.2026 разрешены во всех проектах (решение владельца); управление экраном —
+    браузер целиком, компьютер по просьбе владельца через окно доступа computer-use (no-screen-control);
   - окно вариантов (с 4.8.0): вопрос без варианта «(Рекомендуется)» первым — отклоняется (questions-as-options п.2,
     requirements-by-interview п.4); вопрос владельцу о факте конфигурации — подсказка модели, без отказа.
 Судится результат правки (файл после замены), а не её текст: обычное обслуживание проходит.
@@ -226,7 +227,8 @@ def exempt(norm, data):
 
 # \u0411\u0435\u043b\u044b\u0439 \u0441\u043f\u0438\u0441\u043e\u043a \u0432\u043d\u0435\u0448\u043d\u0438\u0445 \u0441\u043a\u0438\u043b\u043b\u043e\u0432 \u2014 \u0442\u043e\u0442 \u0436\u0435, \u0447\u0442\u043e \u0432 \u0442\u0430\u0431\u043b\u0438\u0446\u0435 docs/tools/allowed-skill-sources.md \u043f.2 (\u0441\u0432\u0435\u0440\u044f\u0435\u0442 contour-tests \u00a79g).
 SKILL_WHITELIST = {'anthropic-skills:docx', 'anthropic-skills:xlsx', 'anthropic-skills:pptx', 'anthropic-skills:pdf',
-                   'engineering:architecture', 'anthropic-skills:built-in-browser', 'anthropic-skills:chrome-browser'}
+                   'engineering:architecture', 'anthropic-skills:built-in-browser', 'anthropic-skills:chrome-browser',
+                   'anthropic-skills:computer-use'}
 # \u0412\u0441\u0442\u0440\u043e\u0435\u043d\u043d\u044b\u0435 \u0441\u043a\u0438\u043b\u043b\u044b \u0441\u0430\u043c\u043e\u0439 \u0441\u0440\u0435\u0434\u044b Claude Code \u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044f (\u0431\u0435\u0437 \u043f\u0440\u0438\u0441\u0442\u0430\u0432\u043a\u0438 \u043f\u043b\u0430\u0433\u0438\u043d\u0430) \u2014 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u044b \u044f\u0432\u043d\u043e (\u0440\u0435\u0448\u0435\u043d\u0438\u0435 \u0432\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0430 30.10.2026,
 # allowed-skill-sources \u043f.2\u0430); \u0441\u043e\u0441\u0442\u0430\u0432 \u0441\u0432\u0435\u0440\u0435\u043d \u0441\u043e \u0441\u043f\u0438\u0441\u043a\u043e\u043c \u0441\u043a\u0438\u043b\u043b\u043e\u0432 \u0441\u0435\u0441\u0441\u0438\u0438 30.10.2026. \u0420\u0435\u0432\u044c\u044e \u043a\u043e\u0434\u0430 1\u0421 \u2014 \u043f\u043e-\u043f\u0440\u0435\u0436\u043d\u0435\u043c\u0443 two-axis-code-review,
 # \u0443\u043f\u0440\u043e\u0449\u0435\u043d\u0438\u0435 \u2014 simplify-codebase: \u0432\u0441\u0442\u0440\u043e\u0435\u043d\u043d\u044b\u0435 code-review/simplify \u0438\u0445 \u043d\u0435 \u0437\u0430\u043c\u0435\u043d\u044f\u044e\u0442.
@@ -280,9 +282,11 @@ def mcp_names(path):
         return set()
 
 
-# \u0421\u0435\u0440\u0432\u0435\u0440\u044b \u0441\u0430\u043c\u043e\u0433\u043e \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044f, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u044f\u0434\u0440\u0430 \u0443\u0436\u0435 \u0440\u0435\u0433\u0443\u043b\u0438\u0440\u0443\u044e\u0442: \u0441\u0435\u0441\u0441\u0438\u0438 (\u0438\u0445 \u0437\u0430\u043f\u0443\u0441\u043a \u0441\u0442\u0435\u0440\u0435\u0436\u0451\u0442 subagent-gate) \u0438 \u0434\u0432\u0430 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430
-# (\u0441\u0430\u043d\u043a\u0446\u0438\u043e\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u044b\u0435 \u0441\u043a\u0438\u043b\u043b\u044b built-in-browser \u0438 chrome-browser; \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u044d\u043a\u0440\u0430\u043d\u043e\u043c \u0441\u043d\u044f\u0442\u043e permissions.deny).
-APP_SERVERS = {'claude_browser', 'claude-in-chrome', 'visualize', 'mcp-registry', 'scheduled-tasks'}
+# Серверы самого приложения, которые правила ядра уже регулируют: сессии (их запуск стережёт subagent-gate), два браузера
+# (весь слой экрана в браузере разрешён) и управление компьютером — по просьбе владельца: каждое приложение он сам
+# разрешает в окне доступа computer-use (решение владельца 20.11.2026, no-screen-control).
+APP_SERVERS = {'claude_browser', 'claude-in-chrome', 'visualize', 'mcp-registry', 'scheduled-tasks', 'computer-use',
+               'remote-devices'}
 # терминал приложения — только чтение: запуск команды в нём шёл бы мимо барьера Bash (guard-destructive)
 APP_READ_ONLY = {'terminal': ('read_terminal', 'list_terminal_tabs')}
 APP_PREFIX = 'ccd_'   # серверы приложения Claude: сессии, панели, окно, настройки (запуск сессий стережёт subagent-gate)
@@ -337,6 +341,8 @@ def check_mcp(tool):
         if plugin == 'ones-core':
             return
     claude_ai = re.fullmatch(UUID, seg) is not None   # \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f claude.ai: \u0438\u043c\u044f \u2014 \u0438\u0434\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u0440, \u00ab1c\u00bb \u0432\u043d\u0443\u0442\u0440\u0438 \u043d\u0435\u0433\u043e \u2014 \u043d\u0435 1\u0421
+    if claude_ai:
+        return   # подключения claude.ai владельца разрешены во всех проектах (решение владельца 20.11.2026)
     onec = not claude_ai and ('code-index' in server or
                               any(re.match(r'^(edt|1c|onec|bsl|v8|nkdk|yaxunit)', t) for t in re.split(r'[-_.]+', server)))
     project = os.environ.get('CLAUDE_PROJECT_DIR') or ''
@@ -384,31 +390,6 @@ def mcp_approval_grown(o_cur, o_new):
     if o_new.get('enableAllProjectMcpServers') and not o_cur.get('enableAllProjectMcpServers'):
         out.append('enableAllProjectMcpServers')
     return out
-
-
-BROWSER = r'^mcp__(?:[\w-]+__)?(Claude_Browser|claude-in-chrome)__(browser_batch|computer)$'
-SCREEN_ACTIONS = ('key', 'type', 'left_click_drag', 'screenshot', 'zoom', 'hold_key', 'left_mouse_down', 'left_mouse_up')
-
-
-def check_browser(tool, ti):
-    """no-screen-control п.4 (волна 2 п.2.19): координаты, эмуляция клавиатуры и скриншот — слой экрана, запрещены и внутри
-    пакета browser_batch; клик и наведение по ref от самой страницы — её протокол, разрешены. Запрет в permissions.deny
-    стоит только на сам computer и в проект приходит лишь повторным setup, а хук — с обновлением плагина."""
-    mm = re.match(BROWSER, tool)
-    if not mm:
-        return
-    items = [{'name': 'computer', 'input': ti or {}}] if mm.group(2) == 'computer' else \
-        [a for a in (ti or {}).get('actions') or [] if isinstance(a, dict)]
-    for a in items:
-        if not str(a.get('name') or '').endswith('computer'):
-            continue
-        inp = a.get('input') if isinstance(a.get('input'), dict) else {}
-        act = str(inp.get('action') or '')
-        if 'coordinate' in inp or 'start_coordinate' in inp or act in SCREEN_ACTIONS or (act and not inp.get('ref') and act != 'wait'):
-            deny('no-screen-control п.4: %s — действие «%s» %s — это слой экрана (координаты, клавиатура, снимок), даже '
-                 'внутри вкладки браузера. Адресуйся элементом страницы: find/read_page дают ref, дальше клик по ref, '
-                 'form_input для полей, get_page_text/read_page вместо скриншота.' % (tool, act or '?',
-                                                                                     'по координатам' if 'coordinate' in inp else 'без ref'))
 
 
 RECOMMENDED = r'\(\s*(\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443\u0435\u0442\u0441\u044f|\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443\u044e|\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u043e\u0432\u0430\u043d\u043e|recommended)\s*\)'
@@ -470,7 +451,6 @@ def main():
         return
     if tool.startswith('mcp__'):
         check_mcp(tool)
-        check_browser(tool, data.get('tool_input'))
         return
     path = str((data.get('tool_input') or {}).get('file_path') or '')
     if not path.strip():

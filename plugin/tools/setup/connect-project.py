@@ -45,6 +45,8 @@ PLUGIN_ID = 'ones-core@ones-core'
 READONLY_SERVERS = ('v8std', 'bsl-platform', 'bsl-context', 'code-index', 'bsl-ls')
 # бюджет списка скиллов: при 1% (по умолчанию) описания редких скиллов плагина срезаются; skillOverrides скиллы плагина не берёт
 SKILL_BUDGET = 0.02
+# встроенный список задач Claude Code: на Opus 5.x его инструменты выключены, пока переменной нет (решение владельца 20.11.2026)
+TODO_KEY, TODO_ON = 'CLAUDE_CODE_ENABLE_TODO_TOOLS', '1'
 DEFAULT_REPO = 'Only1S/1c-ai-core'
 
 
@@ -129,6 +131,17 @@ def merge_deny(s):
     return added, retired
 
 
+def add_todo_env(s):
+    """Переменная встроенного списка задач в env настроек s, если её там нет; свой выбор проекта (любое значение) не трогается."""
+    env = s.get('env')
+    if env is None:
+        env = s['env'] = {}
+    if not isinstance(env, dict) or TODO_KEY in env:
+        return False
+    env[TODO_KEY] = TODO_ON
+    return True
+
+
 def deny_only(proj, dry):
     """--deny-only: permissions.deny и бюджет списка скиллов в .claude/settings.json проекта; каждая запись печатается до записи файла.
     Бюджет здесь же, потому что обновление проектов идёт этим путём: без него описания части скиллов плагина не доходят до модели."""
@@ -138,7 +151,8 @@ def deny_only(proj, dry):
     budget = 'skillListingBudgetFraction' not in s
     if budget:
         s['skillListingBudgetFraction'] = SKILL_BUDGET
-    changed = added or retired or budget
+    todo = add_todo_env(s)
+    changed = added or retired or budget or todo
     print(('Что будет сделано' if dry else 'Сделано') + (':' if changed else ': ничего — запреты проекта совпадают с шаблоном ядра'))
     for d in added:
         print('  + запрет %s' % d)
@@ -146,6 +160,8 @@ def deny_only(proj, dry):
         print('  - снятый запрет %s (убран из шаблона ядра)' % d)
     if budget:
         print('  + бюджет списка скиллов skillListingBudgetFraction = %s' % SKILL_BUDGET)
+    if todo:
+        print('  + встроенный список задач Claude Code: env %s = %s' % (TODO_KEY, TODO_ON))
     if changed and not dry:
         save(sp, s, [], '', False)
     return 0
@@ -193,6 +209,7 @@ def main():
     s.setdefault('extraKnownMarketplaces', {}).setdefault('ones-core', {'source': src})
     s.setdefault('enabledPlugins', {}).setdefault(PLUGIN_ID, True)
     s.setdefault('skillListingBudgetFraction', SKILL_BUDGET)
+    add_todo_env(s)
     _, retired = merge_deny(s)
     deny = s['permissions']['deny']
     if retired:
